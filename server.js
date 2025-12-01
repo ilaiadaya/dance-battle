@@ -11,22 +11,41 @@ const PORT = process.env.PORT || 8000;
 
 // Initialize PostgreSQL if DATABASE_URL is set
 let postgresPool = null;
+let postgresInitializing = false;
+let postgresReady = false;
+
 if (process.env.DATABASE_URL) {
-  import('./src/utils/postgresStorage.js').then(async ({ initPostgres }) => {
+  postgresInitializing = true;
+  import('./src/utils/postgresStorage.js').then(async ({ initPostgres, getPool }) => {
     try {
       postgresPool = await initPostgres(process.env.DATABASE_URL);
+      postgresReady = true;
       console.log('✅ PostgreSQL initialized');
     } catch (error) {
       console.warn('⚠️  PostgreSQL initialization failed, using file storage:', error.message);
+      postgresReady = true; // Mark as ready even if failed, so we don't wait forever
     }
   }).catch(err => {
     console.warn('⚠️  Could not load PostgreSQL module:', err.message);
+    postgresReady = true;
   });
+} else {
+  postgresReady = true; // No DATABASE_URL, so we're "ready" (won't use Postgres)
 }
 
 // API endpoint to load poses (supports both PostgreSQL and files)
 app.get('/api/poses/:key', async (req, res) => {
   const key = req.params.key;
+  
+  // Wait for PostgreSQL initialization if it's in progress
+  if (postgresInitializing && !postgresReady) {
+    // Wait up to 5 seconds for initialization
+    let waited = 0;
+    while (!postgresReady && waited < 5000) {
+      await new Promise(resolve => setTimeout(resolve, 100));
+      waited += 100;
+    }
+  }
   
   // Try PostgreSQL first if available
   if (postgresPool) {

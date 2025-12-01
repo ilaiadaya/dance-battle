@@ -20,33 +20,58 @@ A React-based dance battle application that uses MediaPipe Pose detection to com
 
 2. **Preprocess videos (required for first run):**
    
+   **Option A - Pure Node.js in 2 steps (recommended, no browser needed!):**
+   ```bash
+   # Step 1: Extract frames (only need to run once)
+   npm run extract-frames
+   
+   # Step 2: Process frames (can rerun if processing fails)
+   npm run process-frames
+   ```
+   This uses TensorFlow.js to process videos directly in Node.js:
+   - Step 1: Extracts frames with ffmpeg (saves to temp-frames/)
+   - Step 2: Processes with TensorFlow.js (no browser!)
+   - Saves to files (and optionally PostgreSQL)
+   - Much faster and more reliable!
+   - If processing fails, you can rerun step 2 without re-extracting frames!
+   
+   **Or all-in-one:**
+   ```bash
+   npm run preprocess-nodejs
+   ```
+   
+   **Option B - Save to PostgreSQL (if DATABASE_URL in .env):**
+   ```bash
+   npm run preprocess-db
+   ```
+   This will process videos and save directly to your PostgreSQL database.
+   
+   **Option C - Save to files (browser-based):**
    ```bash
    npm run preprocess-files
    ```
-   This will:
-   - Process videos in a headless browser
-   - Save pose data directly to `public/poses/` folder as JSON files
-   - Files are automatically loaded when the app starts
-   - No browser interaction needed - pure terminal script
+   This saves pose data to `public/poses/` folder as JSON files.
    
-   **Alternative - Browser-based:**
+   **Option D - Browser-based (legacy):**
    ```bash
    npm run preprocess
    npm run extract-poses
    ```
 
-3. **Optional - Use PostgreSQL instead of files:**
+3. **PostgreSQL Setup:**
    
-   If you have a Postgres database:
+   If you have `DATABASE_URL` in your `.env` file:
+   - The preprocessing will automatically save to Postgres
+   - The app will automatically load from Postgres
+   - No additional setup needed!
+   
+   To manually save existing files to Postgres:
    ```bash
-   # Initialize database
-   DATABASE_URL=your_postgres_url npm run init-postgres
-   
-   # Save pose files to database
-   DATABASE_URL=your_postgres_url npm run save-to-postgres
+   npm run save-to-postgres
    ```
    
-   The app will automatically use Postgres if `DATABASE_URL` is set.
+   **Note:** Railway internal database URLs only work inside Railway.
+   For local preprocessing, use the public connection URL from Railway dashboard.
 
 4. **Run the app:**
    ```bash

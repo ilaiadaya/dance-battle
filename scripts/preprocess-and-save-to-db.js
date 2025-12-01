@@ -1,16 +1,17 @@
 #!/usr/bin/env node
 
 /**
- * Preprocess videos and save directly to PostgreSQL
- * This runs in a headless browser and saves to database
+ * Preprocess videos and save to local files (and optionally PostgreSQL)
+ * This runs in a headless browser and saves to files first, then database if available
  * 
  * Usage: npm run preprocess-db
- * Or on Railway: DATABASE_URL is set automatically
+ * - Always saves to public/poses/*.json files (for local testing)
+ * - Optionally saves to PostgreSQL if DATABASE_URL is in .env
  */
 
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
-import { readFileSync, existsSync } from 'fs';
+import { readFileSync, existsSync, writeFileSync, mkdirSync } from 'fs';
 import puppeteer from 'puppeteer';
 import pg from 'pg';
 const { Pool } = pg;
@@ -37,20 +38,19 @@ if (!databaseUrl) {
   }
 }
 
-if (!databaseUrl) {
-  console.error('❌ Error: DATABASE_URL not found');
-  console.error('   Add DATABASE_URL to .env file or set as environment variable\n');
-  process.exit(1);
-}
+// Database is optional - we'll save to files first
+const useDatabase = !!databaseUrl;
 
-console.log('🎬 Preprocessing videos and saving to PostgreSQL...\n');
+if (useDatabase) {
+  console.log('🎬 Preprocessing videos (will save to files AND PostgreSQL)...\n');
+} else {
+  console.log('🎬 Preprocessing videos (will save to files only)...\n');
+  console.log('💡 Tip: Add DATABASE_URL to .env to also save to PostgreSQL\n');
+}
 
 async function preprocessAndSave() {
   let browser;
-  const pool = new Pool({
-    connectionString: databaseUrl,
-    ssl: databaseUrl.includes('railway') || databaseUrl.includes('sslmode=require') ? { rejectUnauthorized: false } : false
-  });
+  let pool = null;
 
   try {
     // Check if videos exist
@@ -62,22 +62,62 @@ async function preprocessAndSave() {
       process.exit(1);
     }
 
-    // Initialize database
-    await pool.query(`
-      CREATE TABLE IF NOT EXISTS poses (
-        key VARCHAR(255) PRIMARY KEY,
-        data JSONB NOT NULL,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-      )
-    `);
-    console.log('✅ Database ready\n');
+    // Initialize database if DATABASE_URL is available (but don't fail if it doesn't work)
+    if (useDatabase) {
+      try {
+        pool = new Pool({
+          connectionString: databaseUrl,
+          ssl: databaseUrl.includes('railway') || databaseUrl.includes('sslmode=require') ? { rejectUnauthorized: false } : false,
+          connectionTimeoutMillis: 5000 // 5 second timeout
+        });
+
+        // Test connection
+        await Promise.race([
+          pool.query(`SELECT 1`),
+          new Promise((_, reject) => setTimeout(() => reject(new Error('Connection timeout')), 5000))
+        ]);
+        
+        await pool.query(`
+          CREATE TABLE IF NOT EXISTS poses (
+            key VARCHAR(255) PRIMARY KEY,
+            data JSONB NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+          )
+        `);
+        console.log('✅ Database ready\n');
+      } catch (dbError) {
+        console.warn('⚠️  Warning: Could not connect to database:', dbError.message);
+        console.warn('   Will save to files only. This is fine for local testing.\n');
+        if (pool) {
+          try {
+            await pool.end();
+          } catch (e) {
+            // Ignore
+          }
+        }
+        pool = null;
+      }
+    }
+
+    // Ensure poses directory exists
+    const posesDir = join(publicDir, 'poses');
+    if (!existsSync(posesDir)) {
+      mkdirSync(posesDir, { recursive: true });
+    }
 
     console.log('🌐 Launching browser...');
-    browser = await puppeteer.launch({
-      headless: 'new',
-      args: ['--no-sandbox', '--disable-setuid-sandbox']
-    });
+    try {
+      browser = await puppeteer.launch({
+        headless: 'new',
+        args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage']
+      });
+    } catch (browserError) {
+      console.error('❌ Error launching browser:', browserError.message);
+      console.error('   This might be a Puppeteer installation issue.');
+      console.error('   Try: npm install puppeteer --save\n');
+      throw browserError;
+    }
 
     const page = await browser.newPage();
     
@@ -362,7 +402,9 @@ async function preprocessAndSave() {
       }
       
       await browser.close();
-      await pool.end();
+      if (pool) {
+        await pool.end();
+      }
     });
     
   } catch (error) {
@@ -374,6 +416,9 @@ async function preprocessAndSave() {
     }
     if (browser) {
       await browser.close();
+    }
+    if (pool) {
+      await pool.end();
     }
     process.exit(1);
   }

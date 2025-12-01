@@ -88,6 +88,16 @@ export default function DanceBattle({ onShowAnalyzer }) {
 
       cameraVideoRef.current.srcObject = stream;
       cameraStreamRef.current = stream;
+      
+      // Ensure video plays
+      await new Promise((resolve) => {
+        cameraVideoRef.current.onloadedmetadata = () => {
+          cameraVideoRef.current.play().catch(err => {
+            console.warn('Camera video autoplay failed:', err);
+          });
+          resolve();
+        };
+      });
 
       // Check if we have poses
       if (referencePoses.length === 0) {
@@ -107,6 +117,15 @@ export default function DanceBattle({ onShowAnalyzer }) {
       setIsRunning(true);
       referenceVideoRef.current.play();
 
+      // Wait for reference video to be ready
+      await new Promise((resolve) => {
+        if (referenceVideoRef.current.readyState >= 2) {
+          resolve();
+        } else {
+          referenceVideoRef.current.onloadedmetadata = resolve;
+        }
+      });
+      
       // Start overlay loop for reference video
       const overlayLoop = () => {
         if (!isRunning) return;
@@ -114,14 +133,22 @@ export default function DanceBattle({ onShowAnalyzer }) {
         const videoTime = referenceVideoRef.current?.currentTime || 0;
         const videoDuration = referenceVideoRef.current?.duration || 0;
         
-        if (referencePoses.length > 0 && videoDuration > 0 && referenceCanvasRef.current) {
+        if (referencePoses.length > 0 && videoDuration > 0 && referenceCanvasRef.current && referenceVideoRef.current) {
+          // Set canvas size to match video
+          const video = referenceVideoRef.current;
+          const canvas = referenceCanvasRef.current;
+          if (canvas.width !== video.videoWidth || canvas.height !== video.videoHeight) {
+            canvas.width = video.videoWidth || video.offsetWidth;
+            canvas.height = video.videoHeight || video.offsetHeight;
+          }
+          
           const frameIndex = Math.floor(
             (videoTime / videoDuration) * referencePoses.length
           ) % referencePoses.length;
           
           const referenceLandmarks = referencePoses[frameIndex];
           if (referenceLandmarks && poseDetectorRef.current) {
-            poseDetectorRef.current.drawStoredLandmarks(referenceLandmarks, referenceCanvasRef.current);
+            poseDetectorRef.current.drawStoredLandmarks(referenceLandmarks, canvas);
           }
         }
 
@@ -311,7 +338,7 @@ export default function DanceBattle({ onShowAnalyzer }) {
         <div className="camera-section">
           <h2>Your Dance</h2>
           <div className="video-wrapper">
-            <video ref={cameraVideoRef} autoplay playsInline />
+            <video ref={cameraVideoRef} autoplay playsInline muted />
             <canvas ref={cameraCanvasRef} />
             <div className="match-overlay" ref={matchOverlayRef} />
           </div>

@@ -19,6 +19,8 @@ if (process.env.DATABASE_URL) {
     } catch (error) {
       console.warn('⚠️  PostgreSQL initialization failed, using file storage:', error.message);
     }
+  }).catch(err => {
+    console.warn('⚠️  Could not load PostgreSQL module:', err.message);
   });
 }
 

@@ -128,27 +128,21 @@ export default function DanceBattle({ onShowAnalyzer }) {
       
       // Start overlay loop for reference video
       const overlayLoop = () => {
-        if (!isRunning) return;
+        if (!isRunning) {
+          return;
+        }
         
         const videoTime = referenceVideoRef.current?.currentTime || 0;
         const videoDuration = referenceVideoRef.current?.duration || 0;
         
         if (referencePoses.length > 0 && videoDuration > 0 && referenceCanvasRef.current && referenceVideoRef.current) {
-          // Set canvas size to match video
-          const video = referenceVideoRef.current;
-          const canvas = referenceCanvasRef.current;
-          if (canvas.width !== video.videoWidth || canvas.height !== video.videoHeight) {
-            canvas.width = video.videoWidth || video.offsetWidth;
-            canvas.height = video.videoHeight || video.offsetHeight;
-          }
-          
           const frameIndex = Math.floor(
             (videoTime / videoDuration) * referencePoses.length
           ) % referencePoses.length;
           
           const referenceLandmarks = referencePoses[frameIndex];
           if (referenceLandmarks && poseDetectorRef.current) {
-            poseDetectorRef.current.drawStoredLandmarks(referenceLandmarks, canvas);
+            poseDetectorRef.current.drawStoredLandmarks(referenceLandmarks, referenceCanvasRef.current);
           }
         }
 

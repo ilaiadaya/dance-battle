@@ -120,6 +120,7 @@ canvas {
     height: 100%;
     pointer-events: none;
     z-index: 10;
+    image-rendering: pixelated;
 }
 
 .camera-section .video-wrapper canvas {

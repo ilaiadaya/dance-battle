@@ -89,18 +89,39 @@ export class PoseDetector {
     }
 
     drawPose(results, canvasElement) {
-        const ctx = canvasElement.getContext('2d');
-        ctx.save();
-        ctx.clearRect(0, 0, canvasElement.width, canvasElement.height);
+        if (!canvasElement) return;
         
-        // Set canvas size to match video
-        if (canvasElement.width !== canvasElement.offsetWidth || 
-            canvasElement.height !== canvasElement.offsetHeight) {
-            canvasElement.width = canvasElement.offsetWidth;
-            canvasElement.height = canvasElement.offsetHeight;
+        const ctx = canvasElement.getContext('2d');
+        if (!ctx) return;
+        
+        ctx.save();
+        
+        // Get the parent video wrapper to find the video element
+        const videoWrapper = canvasElement.parentElement;
+        const video = videoWrapper?.querySelector('video');
+        
+        // Set canvas size to match video's actual dimensions
+        if (video) {
+            const videoWidth = video.videoWidth || video.offsetWidth || 640;
+            const videoHeight = video.videoHeight || video.offsetHeight || 480;
+            
+            if (canvasElement.width !== videoWidth || canvasElement.height !== videoHeight) {
+                canvasElement.width = videoWidth;
+                canvasElement.height = videoHeight;
+            }
+        } else {
+            // Fallback to offset dimensions
+            const width = canvasElement.offsetWidth || 640;
+            const height = canvasElement.offsetHeight || 480;
+            if (canvasElement.width !== width || canvasElement.height !== height) {
+                canvasElement.width = width;
+                canvasElement.height = height;
+            }
         }
+        
+        ctx.clearRect(0, 0, canvasElement.width, canvasElement.height);
 
-        if (results.poseLandmarks) {
+        if (results.poseLandmarks && canvasElement.width > 0 && canvasElement.height > 0) {
             // Use MediaPipe's drawing utilities if available, otherwise use custom drawing
             if (typeof window.drawConnectors !== 'undefined' && typeof window.drawLandmarks !== 'undefined') {
                 window.drawConnectors(ctx, results.poseLandmarks, POSE_CONNECTIONS, {
@@ -122,13 +143,14 @@ export class PoseDetector {
 
     drawConnections(ctx, landmarks, connections) {
         ctx.strokeStyle = '#00FF00';
-        ctx.lineWidth = 2;
+        ctx.lineWidth = 3; // Make thicker for visibility
 
         connections.forEach(([start, end]) => {
             const startPoint = landmarks[start];
             const endPoint = landmarks[end];
 
-            if (startPoint && endPoint) {
+            if (startPoint && endPoint && 
+                startPoint.visibility > 0.3 && endPoint.visibility > 0.3) {
                 ctx.beginPath();
                 ctx.moveTo(
                     startPoint.x * ctx.canvas.width,
@@ -146,12 +168,14 @@ export class PoseDetector {
     drawLandmarks(ctx, landmarks) {
         ctx.fillStyle = '#FF0000';
         landmarks.forEach((landmark) => {
-            const x = landmark.x * ctx.canvas.width;
-            const y = landmark.y * ctx.canvas.height;
+            if (landmark && landmark.visibility > 0.3) {
+                const x = landmark.x * ctx.canvas.width;
+                const y = landmark.y * ctx.canvas.height;
 
-            ctx.beginPath();
-            ctx.arc(x, y, 3, 0, 2 * Math.PI);
-            ctx.fill();
+                ctx.beginPath();
+                ctx.arc(x, y, 4, 0, 2 * Math.PI); // Slightly larger for visibility
+                ctx.fill();
+            }
         });
     }
 
@@ -161,21 +185,42 @@ export class PoseDetector {
 
     // Draw pre-stored landmarks without detection
     drawStoredLandmarks(landmarks, canvasElement) {
-        if (!landmarks) return;
+        if (!landmarks || !canvasElement) return;
 
         const ctx = canvasElement.getContext('2d');
-        ctx.save();
-        ctx.clearRect(0, 0, canvasElement.width, canvasElement.height);
+        if (!ctx) return;
         
-        // Set canvas size to match video
-        if (canvasElement.width !== canvasElement.offsetWidth || 
-            canvasElement.height !== canvasElement.offsetHeight) {
-            canvasElement.width = canvasElement.offsetWidth;
-            canvasElement.height = canvasElement.offsetHeight;
+        ctx.save();
+        
+        // Get the parent video wrapper to find the video element
+        const videoWrapper = canvasElement.parentElement;
+        const video = videoWrapper?.querySelector('video');
+        
+        // Set canvas size to match video's actual dimensions
+        if (video) {
+            const videoWidth = video.videoWidth || video.offsetWidth || 640;
+            const videoHeight = video.videoHeight || video.offsetHeight || 480;
+            
+            if (canvasElement.width !== videoWidth || canvasElement.height !== videoHeight) {
+                canvasElement.width = videoWidth;
+                canvasElement.height = videoHeight;
+            }
+        } else {
+            // Fallback to offset dimensions
+            const width = canvasElement.offsetWidth || 640;
+            const height = canvasElement.offsetHeight || 480;
+            if (canvasElement.width !== width || canvasElement.height !== height) {
+                canvasElement.width = width;
+                canvasElement.height = height;
+            }
         }
+        
+        ctx.clearRect(0, 0, canvasElement.width, canvasElement.height);
 
-        this.drawConnections(ctx, landmarks, POSE_CONNECTIONS);
-        this.drawLandmarks(ctx, landmarks);
+        if (canvasElement.width > 0 && canvasElement.height > 0) {
+            this.drawConnections(ctx, landmarks, POSE_CONNECTIONS);
+            this.drawLandmarks(ctx, landmarks);
+        }
 
         ctx.restore();
     }

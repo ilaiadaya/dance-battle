@@ -41,4 +41,11 @@ temp-frames/
 
 # Pose data files (loaded from database, don't commit)
 public/poses/*.json
+public/poses/danceone.json
+public/poses/dancetwo.json
+
+# Large video files (use external storage or Git LFS if needed)
+public/*.mp4
+public/danceone.mp4
+public/dancetwo.mp4
 

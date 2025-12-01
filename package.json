@@ -21,11 +21,13 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
+    "start": "node server.js",
     "preprocess": "node scripts/preprocess.js",
     "preprocess-files": "node scripts/preprocess-to-files.js",
     "extract-poses": "node scripts/extract-poses.js"
   },
   "dependencies": {
+    "express": "^4.22.0",
     "react": "^18.2.0",
     "react-dom": "^18.2.0"
   },

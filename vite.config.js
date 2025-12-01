@@ -7,6 +7,11 @@ export default defineConfig({
     port: 8000,
     open: true
   },
-  publicDir: 'public'
+  publicDir: 'public',
+  build: {
+    outDir: 'dist',
+    assetsDir: 'assets',
+    sourcemap: false
+  }
 });
 

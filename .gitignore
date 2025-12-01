@@ -4,6 +4,7 @@ package-lock.json
 yarn.lock
 
 # Build outputs
+# Note: dist/ is ignored but Railway will build it during deployment
 dist/
 build/
 .vite/

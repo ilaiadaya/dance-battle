@@ -88,9 +88,24 @@ dance/
 
 ```bash
 npm run build
+npm start
 ```
 
 The built files will be in the `dist/` directory.
+
+## Deploy to Railway
+
+This app is ready to deploy on Railway! See [RAILWAY.md](RAILWAY.md) for detailed instructions.
+
+**Quick deploy:**
+1. Push your code to GitHub
+2. Connect your repo to Railway
+3. Railway will automatically build and deploy
+
+The app includes:
+- ✅ Production server (`server.js`)
+- ✅ Railway configuration (`railway.json`)
+- ✅ Proper build and start scripts
 
 ## Technologies
 

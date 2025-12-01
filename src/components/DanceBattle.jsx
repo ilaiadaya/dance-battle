@@ -151,7 +151,26 @@ export default function DanceBattle() {
           
           const referenceLandmarks = referencePoses[frameIndex];
           if (referenceLandmarks && poseDetectorRef.current && canvas.width > 0 && canvas.height > 0) {
+            // Debug log first few frames
+            if (frameIndex < 3) {
+              console.log('Drawing reference pose:', {
+                frameIndex,
+                landmarksCount: referenceLandmarks?.length,
+                canvasSize: `${canvas.width}x${canvas.height}`,
+                videoSize: `${video.videoWidth}x${video.videoHeight}`,
+                firstLandmark: referenceLandmarks?.[0]
+              });
+            }
             poseDetectorRef.current.drawStoredLandmarks(referenceLandmarks, canvas);
+          } else {
+            if (frameIndex < 3) {
+              console.warn('Cannot draw reference pose:', {
+                hasLandmarks: !!referenceLandmarks,
+                hasDetector: !!poseDetectorRef.current,
+                canvasSize: `${canvas?.width}x${canvas?.height}`,
+                videoSize: `${video?.videoWidth}x${video?.videoHeight}`
+              });
+            }
           }
         }
 

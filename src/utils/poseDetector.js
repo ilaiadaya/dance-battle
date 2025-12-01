@@ -167,16 +167,30 @@ export class PoseDetector {
 
     drawLandmarks(ctx, landmarks) {
         ctx.fillStyle = '#FF0000';
-        landmarks.forEach((landmark) => {
-            if (landmark && landmark.visibility > 0.3) {
-                const x = landmark.x * ctx.canvas.width;
-                const y = landmark.y * ctx.canvas.height;
+        let drawnCount = 0;
+        landmarks.forEach((landmark, index) => {
+            if (landmark && (landmark.x !== undefined || landmark.x !== 0) && (landmark.y !== undefined || landmark.y !== 0)) {
+                // Check visibility if it exists, otherwise draw anyway
+                const visible = landmark.visibility !== undefined ? landmark.visibility > 0.3 : true;
+                
+                if (visible) {
+                    const x = landmark.x * ctx.canvas.width;
+                    const y = landmark.y * ctx.canvas.height;
 
-                ctx.beginPath();
-                ctx.arc(x, y, 4, 0, 2 * Math.PI); // Slightly larger for visibility
-                ctx.fill();
+                    ctx.beginPath();
+                    ctx.arc(x, y, 5, 0, 2 * Math.PI); // Larger for visibility
+                    ctx.fill();
+                    drawnCount++;
+                }
             }
         });
+        
+        if (drawnCount === 0 && landmarks.length > 0) {
+            console.warn('No landmarks drawn!', {
+                landmarksLength: landmarks.length,
+                firstLandmark: landmarks[0]
+            });
+        }
     }
 
     getPoseLandmarks(results) {
@@ -185,18 +199,35 @@ export class PoseDetector {
 
     // Draw pre-stored landmarks without detection
     drawStoredLandmarks(landmarks, canvasElement) {
-        if (!landmarks || !canvasElement) return;
+        if (!landmarks || !canvasElement) {
+            console.warn('drawStoredLandmarks: missing landmarks or canvas', { landmarks: !!landmarks, canvas: !!canvasElement });
+            return;
+        }
 
         const ctx = canvasElement.getContext('2d');
-        if (!ctx) return;
+        if (!ctx) {
+            console.warn('drawStoredLandmarks: could not get canvas context');
+            return;
+        }
         
         // Canvas should already be sized by the caller
         if (canvasElement.width === 0 || canvasElement.height === 0) {
+            console.warn('drawStoredLandmarks: canvas not sized', { width: canvasElement.width, height: canvasElement.height });
             return; // Canvas not ready
+        }
+        
+        if (!Array.isArray(landmarks) || landmarks.length === 0) {
+            console.warn('drawStoredLandmarks: invalid landmarks', { isArray: Array.isArray(landmarks), length: landmarks?.length });
+            return;
         }
         
         ctx.save();
         ctx.clearRect(0, 0, canvasElement.width, canvasElement.height);
+
+        // Draw a test rectangle to verify canvas is working
+        ctx.strokeStyle = '#FF00FF';
+        ctx.lineWidth = 5;
+        ctx.strokeRect(10, 10, 100, 100);
 
         this.drawConnections(ctx, landmarks, POSE_CONNECTIONS);
         this.drawLandmarks(ctx, landmarks);

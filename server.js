@@ -106,11 +106,18 @@ app.get('*', (req, res) => {
   }
 });
 
-app.listen(PORT, () => {
+app.listen(PORT, async () => {
   console.log(`🚀 Server running on port ${PORT}`);
   console.log(`📦 Serving files from dist/ and public/`);
-  if (postgresPool) {
-    console.log(`🗄️  PostgreSQL enabled`);
+  
+  // Wait a bit for PostgreSQL to initialize
+  if (process.env.DATABASE_URL) {
+    await new Promise(resolve => setTimeout(resolve, 1000));
+    if (postgresPool) {
+      console.log(`🗄️  PostgreSQL enabled`);
+    } else {
+      console.log(`📁 PostgreSQL initializing... (will use when ready)`);
+    }
   } else {
     console.log(`📁 Using file storage (public/poses/)`);
   }

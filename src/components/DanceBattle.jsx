@@ -43,15 +43,29 @@ export default function DanceBattle({ onShowAnalyzer }) {
     };
   }, []);
 
+  // Reload poses when video selection changes
+  useEffect(() => {
+    if (poseDetectorRef.current && movementComparerRef.current) {
+      loadSavedPoses();
+    }
+  }, [selectedVideo]);
+
   const loadSavedPoses = async () => {
     const key = `danceBattle_${selectedVideo}`;
-    const savedPoses = await loadPoses(key);
-    if (savedPoses && savedPoses.length > 0) {
-      setReferencePoses(savedPoses);
-      movementComparerRef.current.setReferencePoses(savedPoses);
-      setStatus(`✅ Loaded ${savedPoses.length} saved poses - Ready!`);
-    } else {
-      setStatus('No saved poses found. Use "Analyze Video" to process a video first.');
+    setStatus('Loading pose data...');
+    
+    try {
+      const savedPoses = await loadPoses(key);
+      if (savedPoses && savedPoses.length > 0) {
+        setReferencePoses(savedPoses);
+        movementComparerRef.current.setReferencePoses(savedPoses);
+        setStatus(`✅ Loaded ${savedPoses.length} saved poses - Ready!`);
+      } else {
+        setStatus(`❌ No saved poses found for ${selectedVideo}. Run: npm run preprocess-files`);
+      }
+    } catch (error) {
+      console.error('Error loading poses:', error);
+      setStatus(`❌ Error loading poses: ${error.message}`);
     }
   };
 

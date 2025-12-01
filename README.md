@@ -20,20 +20,33 @@ A React-based dance battle application that uses MediaPipe Pose detection to com
 
 2. **Preprocess videos (required for first run):**
    
-   **Option A - Direct to files (recommended):**
    ```bash
    npm run preprocess-files
    ```
    This will:
    - Process videos in a headless browser
    - Save pose data directly to `public/poses/` folder as JSON files
+   - Files are automatically loaded when the app starts
    - No browser interaction needed - pure terminal script
    
-   **Option B - Browser-based (alternative):**
+   **Alternative - Browser-based:**
    ```bash
    npm run preprocess
+   npm run extract-poses
    ```
-   Then run `npm run extract-poses` to save to files.
+
+3. **Optional - Use PostgreSQL instead of files:**
+   
+   If you have a Postgres database:
+   ```bash
+   # Initialize database
+   DATABASE_URL=your_postgres_url npm run init-postgres
+   
+   # Save pose files to database
+   DATABASE_URL=your_postgres_url npm run save-to-postgres
+   ```
+   
+   The app will automatically use Postgres if `DATABASE_URL` is set.
 
 4. **Run the app:**
    ```bash

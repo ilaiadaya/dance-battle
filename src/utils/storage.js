@@ -25,10 +25,28 @@ export async function savePoses(key, poses) {
 }
 
 export async function loadPoses(key) {
-    // First, try loading from file in public/poses folder
+    // Try API endpoint first (supports both files and PostgreSQL)
+    try {
+        const response = await fetch(`/api/poses/${key}`, {
+            cache: 'no-cache'
+        });
+        if (response.ok) {
+            const poses = await response.json();
+            if (Array.isArray(poses) && poses.length > 0) {
+                console.log(`✅ Loaded ${poses.length} poses from server (${key})`);
+                return poses;
+            }
+        }
+    } catch (error) {
+        console.log(`API load failed for ${key}, trying direct file...`);
+    }
+    
+    // Fallback: try direct file access
     try {
         const fileName = key.replace('danceBattle_', '') + '.json';
-        const response = await fetch(`/poses/${fileName}`);
+        const response = await fetch(`/poses/${fileName}`, {
+            cache: 'no-cache'
+        });
         if (response.ok) {
             const poses = await response.json();
             if (Array.isArray(poses) && poses.length > 0) {
@@ -37,7 +55,7 @@ export async function loadPoses(key) {
             }
         }
     } catch (error) {
-        console.log(`No file found for ${key}, trying browser storage...`);
+        console.log(`File load failed for ${key}: ${error.message}`);
     }
 
     // Fallback to IndexedDB

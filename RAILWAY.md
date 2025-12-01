@@ -40,9 +40,9 @@ The app is configured with:
   - Or generating them on first run
 
 ### Environment Variables
-Currently no environment variables are required, but you can add:
 - `PORT` - Railway sets this automatically
 - `NODE_ENV=production` - Railway sets this automatically
+- `DATABASE_URL` (optional) - PostgreSQL connection string if you want to use a database instead of files
 
 ## Custom Domain
 

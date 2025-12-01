@@ -8,11 +8,7 @@ function App() {
 
   return (
     <div className="app">
-      {!showAnalyzer ? (
-        <DanceBattle onShowAnalyzer={() => setShowAnalyzer(true)} />
-      ) : (
-        <VideoAnalyzer onClose={() => setShowAnalyzer(false)} />
-      )}
+      <DanceBattle />
     </div>
   );
 }

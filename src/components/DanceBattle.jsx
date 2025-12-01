@@ -2,9 +2,8 @@ import { useState, useEffect, useRef } from 'react';
 import { PoseDetector } from '../utils/poseDetector';
 import { MovementComparer } from '../utils/movementComparer';
 import { loadPoses, savePoses } from '../utils/storage';
-import { exportAllPoses } from '../utils/exportStorage';
 
-export default function DanceBattle({ onShowAnalyzer }) {
+export default function DanceBattle() {
   const [score, setScore] = useState(0);
   const [targetScore] = useState(1000);
   const [status, setStatus] = useState('Ready to start');
@@ -132,17 +131,27 @@ export default function DanceBattle({ onShowAnalyzer }) {
           return;
         }
         
-        const videoTime = referenceVideoRef.current?.currentTime || 0;
-        const videoDuration = referenceVideoRef.current?.duration || 0;
+        const video = referenceVideoRef.current;
+        const canvas = referenceCanvasRef.current;
+        const videoTime = video?.currentTime || 0;
+        const videoDuration = video?.duration || 0;
         
-        if (referencePoses.length > 0 && videoDuration > 0 && referenceCanvasRef.current && referenceVideoRef.current) {
+        if (referencePoses.length > 0 && videoDuration > 0 && canvas && video) {
+          // Ensure canvas is sized correctly
+          if (video.videoWidth > 0 && video.videoHeight > 0) {
+            if (canvas.width !== video.videoWidth || canvas.height !== video.videoHeight) {
+              canvas.width = video.videoWidth;
+              canvas.height = video.videoHeight;
+            }
+          }
+          
           const frameIndex = Math.floor(
             (videoTime / videoDuration) * referencePoses.length
           ) % referencePoses.length;
           
           const referenceLandmarks = referencePoses[frameIndex];
-          if (referenceLandmarks && poseDetectorRef.current) {
-            poseDetectorRef.current.drawStoredLandmarks(referenceLandmarks, referenceCanvasRef.current);
+          if (referenceLandmarks && poseDetectorRef.current && canvas.width > 0 && canvas.height > 0) {
+            poseDetectorRef.current.drawStoredLandmarks(referenceLandmarks, canvas);
           }
         }
 
@@ -213,6 +222,18 @@ export default function DanceBattle({ onShowAnalyzer }) {
       if (cameraVideoRef.current?.readyState < 2) {
         comparisonLoopRef.current = setTimeout(startComparisonLoop, 100);
         return;
+      }
+
+      // Ensure camera canvas is sized correctly
+      const cameraVideo = cameraVideoRef.current;
+      const cameraCanvas = cameraCanvasRef.current;
+      if (cameraVideo && cameraCanvas) {
+        const videoWidth = cameraVideo.videoWidth || cameraVideo.offsetWidth || 640;
+        const videoHeight = cameraVideo.videoHeight || cameraVideo.offsetHeight || 480;
+        if (cameraCanvas.width !== videoWidth || cameraCanvas.height !== videoHeight) {
+          cameraCanvas.width = videoWidth;
+          cameraCanvas.height = videoHeight;
+        }
       }
 
       const cameraResults = await poseDetectorRef.current.detectPose(
@@ -353,28 +374,6 @@ export default function DanceBattle({ onShowAnalyzer }) {
           disabled={!isRunning}
         >
           Stop
-        </button>
-        <button 
-          className="btn btn-analyze" 
-          onClick={onShowAnalyzer}
-          disabled={isRunning}
-        >
-          Analyze Video
-        </button>
-        <button 
-          className="btn btn-secondary" 
-          onClick={async () => {
-            try {
-              await exportAllPoses();
-              setStatus('✅ Exported all pose data as JSON file!');
-            } catch (error) {
-              setStatus(`❌ Export failed: ${error.message}`);
-            }
-          }}
-          disabled={isRunning}
-          title="Export all saved pose data as JSON file"
-        >
-          Export Data
         </button>
       </div>
 

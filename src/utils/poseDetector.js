@@ -190,37 +190,16 @@ export class PoseDetector {
         const ctx = canvasElement.getContext('2d');
         if (!ctx) return;
         
-        ctx.save();
-        
-        // Get the parent video wrapper to find the video element
-        const videoWrapper = canvasElement.parentElement;
-        const video = videoWrapper?.querySelector('video');
-        
-        // Set canvas size to match video's actual dimensions
-        if (video) {
-            const videoWidth = video.videoWidth || video.offsetWidth || 640;
-            const videoHeight = video.videoHeight || video.offsetHeight || 480;
-            
-            if (canvasElement.width !== videoWidth || canvasElement.height !== videoHeight) {
-                canvasElement.width = videoWidth;
-                canvasElement.height = videoHeight;
-            }
-        } else {
-            // Fallback to offset dimensions
-            const width = canvasElement.offsetWidth || 640;
-            const height = canvasElement.offsetHeight || 480;
-            if (canvasElement.width !== width || canvasElement.height !== height) {
-                canvasElement.width = width;
-                canvasElement.height = height;
-            }
+        // Canvas should already be sized by the caller
+        if (canvasElement.width === 0 || canvasElement.height === 0) {
+            return; // Canvas not ready
         }
         
+        ctx.save();
         ctx.clearRect(0, 0, canvasElement.width, canvasElement.height);
 
-        if (canvasElement.width > 0 && canvasElement.height > 0) {
-            this.drawConnections(ctx, landmarks, POSE_CONNECTIONS);
-            this.drawLandmarks(ctx, landmarks);
-        }
+        this.drawConnections(ctx, landmarks, POSE_CONNECTIONS);
+        this.drawLandmarks(ctx, landmarks);
 
         ctx.restore();
     }

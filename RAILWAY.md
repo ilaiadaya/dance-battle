@@ -42,7 +42,21 @@ The app is configured with:
 ### Environment Variables
 - `PORT` - Railway sets this automatically
 - `NODE_ENV=production` - Railway sets this automatically
-- `DATABASE_URL` (optional) - PostgreSQL connection string if you want to use a database instead of files
+- `DATABASE_URL` - Railway automatically provides this if you add a PostgreSQL service
+
+### Preprocessing on Railway
+
+After deploying, you can run preprocessing directly on Railway:
+
+1. **Add PostgreSQL service** in Railway (if not already added)
+2. **Railway automatically sets `DATABASE_URL`** environment variable
+3. **Run preprocessing:**
+   - Go to your service → Deployments → Run Command
+   - Or use Railway CLI: `railway run npm run preprocess-db`
+   
+   This will process videos and save directly to your Railway PostgreSQL database.
+
+**Note:** Railway internal database URLs work perfectly on Railway, so preprocessing will work automatically!
 
 ## Custom Domain
 

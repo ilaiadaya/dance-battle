@@ -24,9 +24,11 @@
     "start": "node server.js",
     "preprocess": "node scripts/preprocess.js",
     "preprocess-files": "node scripts/preprocess-to-files.js",
+    "preprocess-db": "node scripts/preprocess-and-save-to-db.js",
     "extract-poses": "node scripts/extract-poses.js",
     "init-postgres": "node scripts/init-postgres.js",
-    "save-to-postgres": "node scripts/save-to-postgres.js"
+    "save-to-postgres": "node scripts/save-to-postgres.js",
+    "extract-to-postgres": "node scripts/extract-to-postgres.js"
   },
   "dependencies": {
     "express": "^4.22.0",

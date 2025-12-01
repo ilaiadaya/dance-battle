@@ -1,27 +1,27 @@
 #!/usr/bin/env node
 
 /**
- * Preprocess videos and save pose data directly to files
- * This runs in a headless browser and saves to public/poses/ folder
+ * Preprocess videos and save directly to PostgreSQL
+ * This runs in a headless browser and saves to database
  * 
- * Usage: npm run preprocess-files
+ * Usage: npm run preprocess-db
+ * Or on Railway: DATABASE_URL is set automatically
  */
 
-import { writeFileSync, mkdirSync, existsSync, readFileSync } from 'fs';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
+import { readFileSync, existsSync } from 'fs';
 import puppeteer from 'puppeteer';
+import pg from 'pg';
+const { Pool } = pg;
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 const projectRoot = join(__dirname, '..');
-const posesDir = join(projectRoot, 'public', 'poses');
 const publicDir = join(projectRoot, 'public');
 
-// Check if DATABASE_URL is set for direct Postgres saving
+// Load DATABASE_URL from .env or environment
 let databaseUrl = process.env.DATABASE_URL;
-
-// Try to load from .env file if not in environment
 if (!databaseUrl) {
   try {
     const envPath = join(projectRoot, '.env');
@@ -37,30 +37,41 @@ if (!databaseUrl) {
   }
 }
 
-// Ensure poses directory exists
-if (!existsSync(posesDir)) {
-  mkdirSync(posesDir, { recursive: true });
+if (!databaseUrl) {
+  console.error('❌ Error: DATABASE_URL not found');
+  console.error('   Add DATABASE_URL to .env file or set as environment variable\n');
+  process.exit(1);
 }
 
-console.log('🎬 Preprocessing videos and saving to files...\n');
+console.log('🎬 Preprocessing videos and saving to PostgreSQL...\n');
 
-async function preprocessVideos() {
+async function preprocessAndSave() {
   let browser;
-  
+  const pool = new Pool({
+    connectionString: databaseUrl,
+    ssl: databaseUrl.includes('railway') || databaseUrl.includes('sslmode=require') ? { rejectUnauthorized: false } : false
+  });
+
   try {
     // Check if videos exist
     const danceonePath = join(publicDir, 'danceone.mp4');
     const dancetwoPath = join(publicDir, 'dancetwo.mp4');
     
-    if (!existsSync(danceonePath)) {
-      console.error('❌ Error: danceone.mp4 not found in public/ directory');
+    if (!existsSync(danceonePath) || !existsSync(dancetwoPath)) {
+      console.error('❌ Error: Video files not found in public/ directory');
       process.exit(1);
     }
-    
-    if (!existsSync(dancetwoPath)) {
-      console.error('❌ Error: dancetwo.mp4 not found in public/ directory');
-      process.exit(1);
-    }
+
+    // Initialize database
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS poses (
+        key VARCHAR(255) PRIMARY KEY,
+        data JSONB NOT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+    console.log('✅ Database ready\n');
 
     console.log('🌐 Launching browser...');
     browser = await puppeteer.launch({
@@ -70,9 +81,8 @@ async function preprocessVideos() {
 
     const page = await browser.newPage();
     
-    // Create a simple HTML page that will process the videos
-    const htmlContent = `
-<!DOCTYPE html>
+    // Create preprocessing HTML (same as preprocess-to-files.js)
+    const htmlContent = `<!DOCTYPE html>
 <html>
 <head>
     <title>Preprocessing</title>
@@ -268,12 +278,13 @@ async function preprocessVideos() {
     `;
 
     // Write temporary HTML file
+    const { writeFileSync } = await import('fs');
     const tempHtmlPath = join(publicDir, 'temp-preprocess.html');
     writeFileSync(tempHtmlPath, htmlContent, 'utf8');
 
     // Start a simple HTTP server
     const { createServer } = await import('http');
-    const { readFileSync } = await import('fs');
+    const { readFileSync: rf } = await import('fs');
     const { extname } = await import('path');
     
     const server = createServer((req, res) => {
@@ -293,7 +304,7 @@ async function preprocessVideos() {
       }[ext] || 'application/octet-stream';
       
       res.writeHead(200, { 'Content-Type': contentType });
-      res.end(readFileSync(filePath));
+      res.end(rf(filePath));
     });
     
     server.listen(8001, async () => {
@@ -315,79 +326,33 @@ async function preprocessVideos() {
         return window.preprocessResults;
       });
       
-      // Save to PostgreSQL if DATABASE_URL is set, otherwise save to files
-      if (databaseUrl) {
-        console.log('💾 Saving pose data to PostgreSQL...\n');
-        
-        const { Pool } = await import('pg');
-        const pool = new Pool({
-          connectionString: databaseUrl,
-          ssl: databaseUrl.includes('railway') || databaseUrl.includes('sslmode=require') ? { rejectUnauthorized: false } : false
-        });
-
-        try {
-          // Ensure table exists
-          await pool.query(`
-            CREATE TABLE IF NOT EXISTS poses (
-              key VARCHAR(255) PRIMARY KEY,
-              data JSONB NOT NULL,
-              created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-              updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            )
-          `);
-
-          if (results.danceone && results.danceone.length > 0) {
-            await pool.query(
-              `INSERT INTO poses (key, data, updated_at) 
-               VALUES ($1, $2, CURRENT_TIMESTAMP)
-               ON CONFLICT (key) 
-               DO UPDATE SET data = $2, updated_at = CURRENT_TIMESTAMP`,
-              ['danceBattle_danceone', JSON.stringify(results.danceone)]
-            );
-            console.log(`✅ Saved ${results.danceone.length} poses → PostgreSQL (danceBattle_danceone)`);
-          }
-          
-          if (results.dancetwo && results.dancetwo.length > 0) {
-            await pool.query(
-              `INSERT INTO poses (key, data, updated_at) 
-               VALUES ($1, $2, CURRENT_TIMESTAMP)
-               ON CONFLICT (key) 
-               DO UPDATE SET data = $2, updated_at = CURRENT_TIMESTAMP`,
-              ['danceBattle_dancetwo', JSON.stringify(results.dancetwo)]
-            );
-            console.log(`✅ Saved ${results.dancetwo.length} poses → PostgreSQL (danceBattle_dancetwo)`);
-          }
-          
-          await pool.end();
-          console.log(`\n✅ Done! All pose data saved to PostgreSQL.\n`);
-          console.log('The app will now load from the database automatically.\n');
-        } catch (error) {
-          console.error('❌ Error saving to PostgreSQL:', error.message);
-          if (error.message.includes('ENOTFOUND') || error.message.includes('ECONNREFUSED')) {
-            console.error('\n💡 Tip: Railway internal URLs only work inside Railway.');
-            console.error('   For local preprocessing, use the public connection URL.\n');
-          }
-          await pool.end();
-        }
-      } else {
-        // Save to files
-        console.log('💾 Saving pose data to files...\n');
-        
-        if (results.danceone && results.danceone.length > 0) {
-          const filePath = join(posesDir, 'danceone.json');
-          writeFileSync(filePath, JSON.stringify(results.danceone, null, 2), 'utf8');
-          console.log(`✅ Saved ${results.danceone.length} poses → danceone.json`);
-        }
-        
-        if (results.dancetwo && results.dancetwo.length > 0) {
-          const filePath = join(posesDir, 'dancetwo.json');
-          writeFileSync(filePath, JSON.stringify(results.dancetwo, null, 2), 'utf8');
-          console.log(`✅ Saved ${results.dancetwo.length} poses → dancetwo.json`);
-        }
-        
-        console.log(`\n✅ Done! All pose data saved to: ${posesDir}\n`);
-        console.log('The app will now load from these files automatically.\n');
+      // Save to PostgreSQL
+      console.log('💾 Saving pose data to PostgreSQL...\n');
+      
+      if (results.danceone && results.danceone.length > 0) {
+        await pool.query(
+          `INSERT INTO poses (key, data, updated_at) 
+           VALUES ($1, $2, CURRENT_TIMESTAMP)
+           ON CONFLICT (key) 
+           DO UPDATE SET data = $2, updated_at = CURRENT_TIMESTAMP`,
+          ['danceBattle_danceone', JSON.stringify(results.danceone)]
+        );
+        console.log(`✅ Saved ${results.danceone.length} poses → PostgreSQL (danceBattle_danceone)`);
       }
+      
+      if (results.dancetwo && results.dancetwo.length > 0) {
+        await pool.query(
+          `INSERT INTO poses (key, data, updated_at) 
+           VALUES ($1, $2, CURRENT_TIMESTAMP)
+           ON CONFLICT (key) 
+           DO UPDATE SET data = $2, updated_at = CURRENT_TIMESTAMP`,
+          ['danceBattle_dancetwo', JSON.stringify(results.dancetwo)]
+        );
+        console.log(`✅ Saved ${results.dancetwo.length} poses → PostgreSQL (danceBattle_dancetwo)`);
+      }
+      
+      console.log(`\n✅ Done! All pose data saved to PostgreSQL.\n`);
+      console.log('The app will now load from the database automatically.\n');
       
       // Cleanup
       server.close();
@@ -397,10 +362,16 @@ async function preprocessVideos() {
       }
       
       await browser.close();
+      await pool.end();
     });
     
   } catch (error) {
     console.error('❌ Error:', error.message);
+    if (error.message.includes('ENOTFOUND') || error.message.includes('ECONNREFUSED')) {
+      console.error('\n💡 Tip: Railway internal URLs only work inside Railway.');
+      console.error('   For local preprocessing, use the public connection URL.');
+      console.error('   Or deploy to Railway and run preprocessing there.\n');
+    }
     if (browser) {
       await browser.close();
     }
@@ -408,5 +379,5 @@ async function preprocessVideos() {
   }
 }
 
-preprocessVideos();
+preprocessAndSave();
 

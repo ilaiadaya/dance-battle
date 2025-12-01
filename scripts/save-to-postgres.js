@@ -17,11 +17,37 @@ const __dirname = dirname(__filename);
 const projectRoot = join(__dirname, '..');
 const posesDir = join(projectRoot, 'public', 'poses');
 
-const connectionString = process.env.DATABASE_URL;
+// Try to load from .env file
+let connectionString = process.env.DATABASE_URL;
 
 if (!connectionString) {
-  console.error('❌ Error: DATABASE_URL environment variable not set');
+  try {
+    const envPath = join(projectRoot, '.env');
+    if (existsSync(envPath)) {
+      const envContent = readFileSync(envPath, 'utf8');
+      const match = envContent.match(/DATABASE_URL=(.+)/);
+      if (match) {
+        connectionString = match[1].trim();
+      }
+    }
+  } catch (error) {
+    // Ignore
+  }
+}
+
+if (!connectionString) {
+  console.error('❌ Error: DATABASE_URL not found in .env file or environment');
+  console.log('\nUsage:');
+  console.log('  DATABASE_URL=your_postgres_url node scripts/save-to-postgres.js');
+  console.log('  Or add DATABASE_URL to .env file\n');
   process.exit(1);
+}
+
+// Check if it's Railway internal URL
+if (connectionString.includes('railway.internal')) {
+  console.warn('⚠️  Warning: Railway internal URL detected.');
+  console.warn('   This URL only works inside Railway.');
+  console.warn('   For local use, get the public connection URL from Railway dashboard.\n');
 }
 
 async function saveToPostgres() {

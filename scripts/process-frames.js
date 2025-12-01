@@ -233,8 +233,14 @@ async function main() {
   const danceoneFramesDir = join(framesDir, 'danceone');
   const dancetwoFramesDir = join(framesDir, 'dancetwo');
   
+  // Check if pose files already exist
+  const danceonePosesFile = join(posesDir, 'danceone.json');
+  const dancetwoPosesFile = join(posesDir, 'dancetwo.json');
+  
   const hasDanceone = existsSync(danceoneFramesDir);
   const hasDancetwo = existsSync(dancetwoFramesDir);
+  const hasDanceonePoses = existsSync(danceonePosesFile);
+  const hasDancetwoPoses = existsSync(dancetwoPosesFile);
   
   if (!hasDanceone && !hasDancetwo) {
     console.error('❌ Error: No frames found. Run: npm run extract-frames first');
@@ -250,24 +256,40 @@ async function main() {
   }
   
   if (frames1.length > 0) {
-    console.log(`📁 Found ${frames1.length} frames for danceone`);
+    if (hasDanceonePoses) {
+      console.log(`⏭️  Skipping danceone (already processed: ${danceonePosesFile})`);
+    } else {
+      console.log(`📁 Found ${frames1.length} frames for danceone`);
+    }
   }
   if (frames2.length > 0) {
-    console.log(`📁 Found ${frames2.length} frames for dancetwo`);
+    if (hasDancetwoPoses) {
+      console.log(`⏭️  Skipping dancetwo (already processed: ${dancetwoPosesFile})`);
+    } else {
+      console.log(`📁 Found ${frames2.length} frames for dancetwo`);
+    }
   }
   console.log('');
   
+  // Check if there's anything to process
+  const needsProcessing = (frames1.length > 0 && !hasDanceonePoses) || (frames2.length > 0 && !hasDancetwoPoses);
+  if (!needsProcessing) {
+    console.log('✅ All videos are already processed!');
+    console.log('   Pose data is saved and ready to use.\n');
+    return;
+  }
+  
   try {
-    // Process danceone if frames exist
-    if (frames1.length > 0) {
+    // Process danceone if frames exist and not already processed
+    if (frames1.length > 0 && !hasDanceonePoses) {
       console.log('📹 Processing danceone frames...\n');
       const poses1 = await processFramesWithTF(frames1, 'danceone');
       await savePoses(poses1, 'danceone');
       console.log('');
     }
     
-    // Process dancetwo if frames exist
-    if (frames2.length > 0) {
+    // Process dancetwo if frames exist and not already processed
+    if (frames2.length > 0 && !hasDancetwoPoses) {
       console.log('📹 Processing dancetwo frames...\n');
       const poses2 = await processFramesWithTF(frames2, 'dancetwo');
       await savePoses(poses2, 'dancetwo');

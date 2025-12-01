@@ -35,8 +35,10 @@ yarn-error.log*
 # Temporary files
 *.tmp
 temp-preprocess.html
+
+# Extracted video frames (temporary, don't commit)
 temp-frames/
 
-# Pose data files (uncomment if you don't want to commit them)
-# public/poses/*.json
+# Pose data files (loaded from database, don't commit)
+public/poses/*.json
 

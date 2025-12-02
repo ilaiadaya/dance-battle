@@ -1,51 +1,8 @@
-# Dependencies
 node_modules/
-package-lock.json
-yarn.lock
-
-# Build outputs
-# Note: dist/ is ignored but Railway will build it during deployment
 dist/
-build/
-.vite/
-
-# Environment
 .env
 .env.local
-.env.*.local
-.env.production
-
-# IDE
-.vscode/
-.idea/
-*.swp
-*.swo
-*~
-
-# OS
 .DS_Store
-Thumbs.db
-
-# Logs
 *.log
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-
-# Temporary files
-*.tmp
-temp-preprocess.html
-
-# Extracted video frames (temporary, don't commit)
 temp-frames/
-
-# Pose data files (loaded from database, don't commit)
-public/poses/*.json
-public/poses/danceone.json
-public/poses/dancetwo.json
-
-# Large video files (use external storage or Git LFS if needed)
-public/*.mp4
-public/danceone.mp4
-public/dancetwo.mp4
 

@@ -1,261 +1,190 @@
 // MediaPipe Pose connections (33 landmarks)
 export const POSE_CONNECTIONS = [
-    // Face
-    [0, 1], [1, 2], [2, 3], [3, 7],
-    [0, 4], [4, 5], [5, 6], [6, 8],
-    [9, 10],
-    // Torso
-    [11, 12], [11, 23], [12, 24], [23, 24],
-    // Left arm
-    [11, 13], [13, 15], [15, 17], [15, 19], [15, 21], [17, 19], [19, 21],
-    // Right arm
-    [12, 14], [14, 16], [16, 18], [16, 20], [16, 22], [18, 20], [20, 22],
-    // Left leg
-    [23, 25], [25, 27], [27, 29], [27, 31], [29, 31],
-    // Right leg
-    [24, 26], [26, 28], [28, 30], [28, 32], [30, 32]
+  // Face
+  [0, 1], [1, 2], [2, 3], [3, 7],
+  [0, 4], [4, 5], [5, 6], [6, 8],
+  [9, 10],
+  // Torso
+  [11, 12], [11, 23], [12, 24], [23, 24],
+  // Left arm
+  [11, 13], [13, 15], [15, 17], [15, 19], [15, 21], [17, 19], [19, 21],
+  // Right arm
+  [12, 14], [14, 16], [16, 18], [16, 20], [16, 22], [18, 20], [20, 22],
+  // Left leg
+  [23, 25], [25, 27], [27, 29], [27, 31], [29, 31],
+  // Right leg
+  [24, 26], [26, 28], [28, 30], [28, 32], [30, 32]
 ];
 
 export class PoseDetector {
-    constructor() {
-        this.pose = null;
-        this.isInitialized = false;
-        this.pendingResolves = [];
-        this.currentCanvas = null;
+  constructor() {
+    this.pose = null;
+    this.isInitialized = false;
+    this.pendingResolves = [];
+    this.currentCanvas = null;
+  }
+
+  async initialize() {
+    if (this.isInitialized) return;
+
+    // Wait for Pose to be available
+    if (typeof window.Pose === 'undefined') {
+      await new Promise((resolve) => {
+        const checkPose = setInterval(() => {
+          if (typeof window.Pose !== 'undefined') {
+            clearInterval(checkPose);
+            resolve();
+          }
+        }, 100);
+      });
     }
 
-    async initialize() {
-        if (this.isInitialized) return;
+    this.pose = new window.Pose({
+      locateFile: (file) => {
+        return `https://cdn.jsdelivr.net/npm/@mediapipe/pose/${file}`;
+      }
+    });
 
-        // Wait for Pose to be available
-        if (typeof window.Pose === 'undefined') {
-            await new Promise((resolve) => {
-                const checkPose = setInterval(() => {
-                    if (typeof window.Pose !== 'undefined') {
-                        clearInterval(checkPose);
-                        resolve();
-                    }
-                }, 100);
-            });
-        }
+    this.pose.setOptions({
+      modelComplexity: 1,
+      smoothLandmarks: true,
+      enableSegmentation: false,
+      smoothSegmentation: false,
+      minDetectionConfidence: 0.5,
+      minTrackingConfidence: 0.5
+    });
 
-        this.pose = new window.Pose({
-            locateFile: (file) => {
-                return `https://cdn.jsdelivr.net/npm/@mediapipe/pose/${file}`;
-            }
+    // Set up the results callback once
+    this.pose.onResults((results) => {
+      if (this.currentCanvas) {
+        this.drawPose(results, this.currentCanvas);
+      }
+      
+      const resolve = this.pendingResolves.shift();
+      if (resolve) {
+        resolve(results);
+      }
+    });
+
+    this.isInitialized = true;
+  }
+
+  async detectPose(imageElement, canvasElement) {
+    if (!this.isInitialized) {
+      await this.initialize();
+    }
+
+    return new Promise((resolve) => {
+      this.currentCanvas = canvasElement;
+      this.pendingResolves.push(resolve);
+      this.pose.send({ image: imageElement });
+    });
+  }
+
+  drawPose(results, canvasElement) {
+    const ctx = canvasElement.getContext('2d');
+    ctx.save();
+    ctx.clearRect(0, 0, canvasElement.width, canvasElement.height);
+    
+    if (canvasElement.width !== canvasElement.offsetWidth || 
+        canvasElement.height !== canvasElement.offsetHeight) {
+      canvasElement.width = canvasElement.offsetWidth;
+      canvasElement.height = canvasElement.offsetHeight;
+    }
+
+    if (results.poseLandmarks) {
+      if (typeof window.drawConnectors !== 'undefined' && typeof window.drawLandmarks !== 'undefined') {
+        window.drawConnectors(ctx, results.poseLandmarks, POSE_CONNECTIONS, {
+          color: '#00FF00',
+          lineWidth: 2
         });
-
-        this.pose.setOptions({
-            modelComplexity: 1,
-            smoothLandmarks: true,
-            enableSegmentation: false,
-            smoothSegmentation: false,
-            minDetectionConfidence: 0.5,
-            minTrackingConfidence: 0.5
+        window.drawLandmarks(ctx, results.poseLandmarks, {
+          color: '#FF0000',
+          radius: 3
         });
-
-        // Set up the results callback once
-        this.pose.onResults((results) => {
-            // Draw on the current canvas if provided
-            if (this.currentCanvas) {
-                this.drawPose(results, this.currentCanvas);
-            }
-            
-            // Resolve any pending promises
-            const resolve = this.pendingResolves.shift();
-            if (resolve) {
-                resolve(results);
-            }
-        });
-
-        this.isInitialized = true;
+      } else {
+        this.drawConnections(ctx, results.poseLandmarks, POSE_CONNECTIONS);
+        this.drawLandmarks(ctx, results.poseLandmarks);
+      }
     }
 
-    async detectPose(imageElement, canvasElement) {
-        if (!this.isInitialized) {
-            await this.initialize();
-        }
+    ctx.restore();
+  }
 
-        return new Promise((resolve) => {
-            // Store the canvas for drawing
-            this.currentCanvas = canvasElement;
-            
-            // Add to pending resolves queue
-            this.pendingResolves.push(resolve);
+  drawConnections(ctx, landmarks, connections) {
+    ctx.strokeStyle = '#00FF00';
+    ctx.lineWidth = 2;
 
-            // Send the image for processing
-            this.pose.send({ image: imageElement });
-        });
+    connections.forEach(([start, end]) => {
+      const startPoint = landmarks[start];
+      const endPoint = landmarks[end];
+
+      if (startPoint && endPoint) {
+        ctx.beginPath();
+        ctx.moveTo(
+          startPoint.x * ctx.canvas.width,
+          startPoint.y * ctx.canvas.height
+        );
+        ctx.lineTo(
+          endPoint.x * ctx.canvas.width,
+          endPoint.y * ctx.canvas.height
+        );
+        ctx.stroke();
+      }
+    });
+  }
+
+  drawLandmarks(ctx, landmarks) {
+    ctx.fillStyle = '#FF0000';
+    landmarks.forEach((landmark) => {
+      const x = landmark.x * ctx.canvas.width;
+      const y = landmark.y * ctx.canvas.height;
+
+      ctx.beginPath();
+      ctx.arc(x, y, 3, 0, 2 * Math.PI);
+      ctx.fill();
+    });
+  }
+
+  getPoseLandmarks(results) {
+    return results.poseLandmarks || null;
+  }
+
+  drawStoredLandmarks(landmarks, canvasElement) {
+    if (!landmarks) return;
+
+    const ctx = canvasElement.getContext('2d');
+    ctx.save();
+    ctx.clearRect(0, 0, canvasElement.width, canvasElement.height);
+    
+    if (canvasElement.width !== canvasElement.offsetWidth || 
+        canvasElement.height !== canvasElement.offsetHeight) {
+      canvasElement.width = canvasElement.offsetWidth;
+      canvasElement.height = canvasElement.offsetHeight;
     }
 
-    drawPose(results, canvasElement) {
-        if (!canvasElement) return;
-        
-        const ctx = canvasElement.getContext('2d');
-        if (!ctx) return;
-        
-        ctx.save();
-        
-        // Get the parent video wrapper to find the video element
-        const videoWrapper = canvasElement.parentElement;
-        const video = videoWrapper?.querySelector('video');
-        
-        // Set canvas size to match video's actual dimensions
-        if (video) {
-            const videoWidth = video.videoWidth || video.offsetWidth || 640;
-            const videoHeight = video.videoHeight || video.offsetHeight || 480;
-            
-            if (canvasElement.width !== videoWidth || canvasElement.height !== videoHeight) {
-                canvasElement.width = videoWidth;
-                canvasElement.height = videoHeight;
-            }
-        } else {
-            // Fallback to offset dimensions
-            const width = canvasElement.offsetWidth || 640;
-            const height = canvasElement.offsetHeight || 480;
-            if (canvasElement.width !== width || canvasElement.height !== height) {
-                canvasElement.width = width;
-                canvasElement.height = height;
-            }
-        }
-        
-        ctx.clearRect(0, 0, canvasElement.width, canvasElement.height);
+    this.drawConnections(ctx, landmarks, POSE_CONNECTIONS);
+    this.drawLandmarks(ctx, landmarks);
 
-        if (results.poseLandmarks && canvasElement.width > 0 && canvasElement.height > 0) {
-            // Use MediaPipe's drawing utilities if available, otherwise use custom drawing
-            if (typeof window.drawConnectors !== 'undefined' && typeof window.drawLandmarks !== 'undefined') {
-                window.drawConnectors(ctx, results.poseLandmarks, POSE_CONNECTIONS, {
-                    color: '#00FF00',
-                    lineWidth: 2
-                });
-                window.drawLandmarks(ctx, results.poseLandmarks, {
-                    color: '#FF0000',
-                    radius: 3
-                });
-            } else {
-                this.drawConnections(ctx, results.poseLandmarks, POSE_CONNECTIONS);
-                this.drawLandmarks(ctx, results.poseLandmarks);
-            }
-        }
+    ctx.restore();
+  }
 
-        ctx.restore();
+  async detectPoseOnly(imageElement) {
+    if (!this.isInitialized) {
+      await this.initialize();
     }
 
-    drawConnections(ctx, landmarks, connections) {
-        ctx.strokeStyle = '#00FF00';
-        ctx.lineWidth = 3; // Make thicker for visibility
+    return new Promise((resolve) => {
+      const previousCanvas = this.currentCanvas;
+      this.currentCanvas = null;
+      
+      this.pendingResolves.push((results) => {
+        this.currentCanvas = previousCanvas;
+        resolve(results);
+      });
 
-        connections.forEach(([start, end]) => {
-            const startPoint = landmarks[start];
-            const endPoint = landmarks[end];
-
-            if (startPoint && endPoint && 
-                startPoint.visibility > 0.3 && endPoint.visibility > 0.3) {
-                ctx.beginPath();
-                ctx.moveTo(
-                    startPoint.x * ctx.canvas.width,
-                    startPoint.y * ctx.canvas.height
-                );
-                ctx.lineTo(
-                    endPoint.x * ctx.canvas.width,
-                    endPoint.y * ctx.canvas.height
-                );
-                ctx.stroke();
-            }
-        });
-    }
-
-    drawLandmarks(ctx, landmarks) {
-        ctx.fillStyle = '#FF0000';
-        let drawnCount = 0;
-        landmarks.forEach((landmark, index) => {
-            if (landmark && (landmark.x !== undefined || landmark.x !== 0) && (landmark.y !== undefined || landmark.y !== 0)) {
-                // Check visibility if it exists, otherwise draw anyway
-                const visible = landmark.visibility !== undefined ? landmark.visibility > 0.3 : true;
-                
-                if (visible) {
-                    const x = landmark.x * ctx.canvas.width;
-                    const y = landmark.y * ctx.canvas.height;
-
-                    ctx.beginPath();
-                    ctx.arc(x, y, 5, 0, 2 * Math.PI); // Larger for visibility
-                    ctx.fill();
-                    drawnCount++;
-                }
-            }
-        });
-        
-        if (drawnCount === 0 && landmarks.length > 0) {
-            console.warn('No landmarks drawn!', {
-                landmarksLength: landmarks.length,
-                firstLandmark: landmarks[0]
-            });
-        }
-    }
-
-    getPoseLandmarks(results) {
-        return results.poseLandmarks || null;
-    }
-
-    // Draw pre-stored landmarks without detection
-    drawStoredLandmarks(landmarks, canvasElement) {
-        if (!landmarks || !canvasElement) {
-            console.warn('drawStoredLandmarks: missing landmarks or canvas', { landmarks: !!landmarks, canvas: !!canvasElement });
-            return;
-        }
-
-        const ctx = canvasElement.getContext('2d');
-        if (!ctx) {
-            console.warn('drawStoredLandmarks: could not get canvas context');
-            return;
-        }
-        
-        // Canvas should already be sized by the caller
-        if (canvasElement.width === 0 || canvasElement.height === 0) {
-            console.warn('drawStoredLandmarks: canvas not sized', { width: canvasElement.width, height: canvasElement.height });
-            return; // Canvas not ready
-        }
-        
-        if (!Array.isArray(landmarks) || landmarks.length === 0) {
-            console.warn('drawStoredLandmarks: invalid landmarks', { isArray: Array.isArray(landmarks), length: landmarks?.length });
-            return;
-        }
-        
-        ctx.save();
-        ctx.clearRect(0, 0, canvasElement.width, canvasElement.height);
-
-        // Draw a test rectangle to verify canvas is working
-        ctx.strokeStyle = '#FF00FF';
-        ctx.lineWidth = 5;
-        ctx.strokeRect(10, 10, 100, 100);
-
-        this.drawConnections(ctx, landmarks, POSE_CONNECTIONS);
-        this.drawLandmarks(ctx, landmarks);
-
-        ctx.restore();
-    }
-
-    // Detect pose without drawing (for analysis)
-    async detectPoseOnly(imageElement) {
-        if (!this.isInitialized) {
-            await this.initialize();
-        }
-
-        return new Promise((resolve) => {
-            // Don't draw for analysis
-            const previousCanvas = this.currentCanvas;
-            this.currentCanvas = null;
-            
-            // Add to pending resolves queue
-            this.pendingResolves.push((results) => {
-                // Restore canvas setting
-                this.currentCanvas = previousCanvas;
-                resolve(results);
-            });
-
-            // Send the image for processing
-            this.pose.send({ image: imageElement });
-        });
-    }
+      this.pose.send({ image: imageElement });
+    });
+  }
 }
 

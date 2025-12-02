@@ -23,6 +23,9 @@ function App() {
   const poseDetectorRef = useRef(null);
   const movementComparerRef = useRef(null);
   const cameraStreamRef = useRef(null);
+  const isRunningRef = useRef(false);
+  const overlayLoopRef = useRef(null);
+  const comparisonLoopRef = useRef(null);
 
   useEffect(() => {
     // Initialize pose detector
@@ -53,7 +56,11 @@ function App() {
     };
     
     Promise.all(scripts.map(loadScript)).then(() => {
+      console.log('MediaPipe scripts loaded');
       initializePoseData();
+    }).catch((error) => {
+      console.error('Error loading MediaPipe scripts:', error);
+      setStatus('Error loading MediaPipe. Please refresh the page.');
     });
     
     return () => {
@@ -203,13 +210,17 @@ function App() {
 
       setStatus('Dance battle started! Follow the moves!');
       setIsRunning(true);
+      isRunningRef.current = true;
       
       if (referenceVideoRef.current) {
         referenceVideoRef.current.play();
       }
 
-      startReferenceOverlayLoop();
-      startComparisonLoop();
+      // Wait a bit for video to be ready
+      setTimeout(() => {
+        startReferenceOverlayLoop();
+        startComparisonLoop();
+      }, 500);
     } catch (error) {
       console.error('Error starting app:', error);
       setStatus('Error: ' + error.message);
@@ -218,7 +229,18 @@ function App() {
 
   const stop = () => {
     setIsRunning(false);
+    isRunningRef.current = false;
     setScore(0);
+    
+    // Cancel animation loops
+    if (overlayLoopRef.current) {
+      cancelAnimationFrame(overlayLoopRef.current);
+      overlayLoopRef.current = null;
+    }
+    if (comparisonLoopRef.current) {
+      cancelAnimationFrame(comparisonLoopRef.current);
+      comparisonLoopRef.current = null;
+    }
     
     if (referenceVideoRef.current) {
       referenceVideoRef.current.pause();
@@ -238,13 +260,18 @@ function App() {
   };
 
   const startReferenceOverlayLoop = () => {
+    // Cancel existing loop if any
+    if (overlayLoopRef.current) {
+      cancelAnimationFrame(overlayLoopRef.current);
+    }
+
     const loop = () => {
-      if (!isRunning) return;
+      if (!isRunningRef.current) return;
 
       const video = referenceVideoRef.current;
       const canvas = referenceCanvasRef.current;
       
-      if (video && canvas && referencePoses.length > 0 && video.duration > 0) {
+      if (video && canvas && referencePoses.length > 0 && video.duration > 0 && !video.paused) {
         const videoTime = video.currentTime;
         const videoDuration = video.duration;
         const frameIndex = Math.floor(
@@ -252,28 +279,38 @@ function App() {
         ) % referencePoses.length;
         
         const referenceLandmarks = referencePoses[frameIndex];
-        if (referenceLandmarks) {
+        if (referenceLandmarks && poseDetectorRef.current) {
           poseDetectorRef.current.drawStoredLandmarks(referenceLandmarks, canvas);
         }
       }
 
-      requestAnimationFrame(loop);
+      overlayLoopRef.current = requestAnimationFrame(loop);
     };
     
     loop();
   };
 
   const startComparisonLoop = () => {
-    const loop = async () => {
-      if (!isRunning) return;
+    // Cancel existing loop if any
+    if (comparisonLoopRef.current) {
+      cancelAnimationFrame(comparisonLoopRef.current);
+    }
 
-      requestAnimationFrame(loop);
+    const loop = async () => {
+      if (!isRunningRef.current) return;
+
+      comparisonLoopRef.current = requestAnimationFrame(loop);
 
       try {
         const cameraVideo = cameraVideoRef.current;
         const cameraCanvas = cameraCanvasRef.current;
         
-        if (!cameraVideo || cameraVideo.readyState < 2) {
+        if (!cameraVideo || !cameraCanvas || cameraVideo.readyState < 2) {
+          return;
+        }
+
+        if (!poseDetectorRef.current) {
+          console.error('Pose detector not initialized');
           return;
         }
 

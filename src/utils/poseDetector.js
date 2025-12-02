@@ -82,15 +82,27 @@ export class PoseDetector {
   }
 
   drawPose(results, canvasElement) {
-    const ctx = canvasElement.getContext('2d');
-    ctx.save();
-    ctx.clearRect(0, 0, canvasElement.width, canvasElement.height);
-    
-    if (canvasElement.width !== canvasElement.offsetWidth || 
-        canvasElement.height !== canvasElement.offsetHeight) {
-      canvasElement.width = canvasElement.offsetWidth;
-      canvasElement.height = canvasElement.offsetHeight;
+    if (!canvasElement) {
+      console.warn('drawPose: canvas element is null');
+      return;
     }
+
+    const ctx = canvasElement.getContext('2d');
+    if (!ctx) {
+      console.warn('drawPose: could not get canvas context');
+      return;
+    }
+
+    ctx.save();
+    
+    // Ensure canvas is sized correctly
+    const rect = canvasElement.getBoundingClientRect();
+    if (canvasElement.width !== rect.width || canvasElement.height !== rect.height) {
+      canvasElement.width = rect.width;
+      canvasElement.height = rect.height;
+    }
+    
+    ctx.clearRect(0, 0, canvasElement.width, canvasElement.height);
 
     if (results.poseLandmarks) {
       if (typeof window.drawConnectors !== 'undefined' && typeof window.drawLandmarks !== 'undefined') {
@@ -151,17 +163,27 @@ export class PoseDetector {
   }
 
   drawStoredLandmarks(landmarks, canvasElement) {
-    if (!landmarks) return;
+    if (!landmarks || !canvasElement) {
+      console.warn('drawStoredLandmarks: missing landmarks or canvas');
+      return;
+    }
 
     const ctx = canvasElement.getContext('2d');
-    ctx.save();
-    ctx.clearRect(0, 0, canvasElement.width, canvasElement.height);
-    
-    if (canvasElement.width !== canvasElement.offsetWidth || 
-        canvasElement.height !== canvasElement.offsetHeight) {
-      canvasElement.width = canvasElement.offsetWidth;
-      canvasElement.height = canvasElement.offsetHeight;
+    if (!ctx) {
+      console.warn('drawStoredLandmarks: could not get canvas context');
+      return;
     }
+
+    ctx.save();
+    
+    // Ensure canvas is sized correctly
+    const rect = canvasElement.getBoundingClientRect();
+    if (canvasElement.width !== rect.width || canvasElement.height !== rect.height) {
+      canvasElement.width = rect.width;
+      canvasElement.height = rect.height;
+    }
+    
+    ctx.clearRect(0, 0, canvasElement.width, canvasElement.height);
 
     this.drawConnections(ctx, landmarks, POSE_CONNECTIONS);
     this.drawLandmarks(ctx, landmarks);

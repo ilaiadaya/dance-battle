@@ -6,3 +6,5 @@ dist/
 *.log
 temp-frames/
 
+public/poses/
+public/danceone.mp4

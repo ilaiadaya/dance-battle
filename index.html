@@ -1,13 +1,69 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Dance Battle</title>
-  </head>
-  <body>
-    <div id="root"></div>
-    <script type="module" src="/src/main.jsx"></script>
-  </body>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🎵 Dance Battle 🎵</h1>
+            <div class="score-display">
+                <div class="score-label">Score</div>
+                <div class="score-value" id="score">0</div>
+                <div class="score-target">Target: <span id="target">1000</span></div>
+            </div>
+        </header>
+
+        <div class="main-content">
+            <div class="video-section">
+                <h2>Reference Dance</h2>
+                <div class="video-wrapper">
+                    <video id="referenceVideo" src="public/dancetwo.mp4" muted loop preload="auto"></video>
+                    <canvas id="referenceCanvas"></canvas>
+                </div>
+            </div>
+
+            <div class="camera-section">
+                <h2>Your Dance</h2>
+                <div class="video-wrapper">
+                    <video id="cameraVideo" autoplay playsinline></video>
+                    <canvas id="cameraCanvas"></canvas>
+                    <div class="match-overlay" id="matchOverlay"></div>
+                </div>
+            </div>
+        </div>
+
+        <div class="controls">
+            <div class="dance-selector">
+                <label for="danceSelect">Select Dance:</label>
+                <select id="danceSelect" class="dance-select">
+                    <option value="dancetwo">Dance Two</option>
+                    <option value="danceone">Dance One</option>
+                </select>
+            </div>
+            <button id="startBtn" class="btn btn-primary">Start Battle</button>
+            <button id="stopBtn" class="btn btn-secondary" disabled>Stop</button>
+        </div>
+
+        <div class="status" id="status">Ready to start</div>
+    </div>
+
+    <div class="match-indicator" id="matchIndicator">
+        <div class="match-flash"></div>
+        <div class="match-text">GREAT!</div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/control_utils/control_utils.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/pose/pose.js" crossorigin="anonymous"></script>
+    <script src="pose-detector.js"></script>
+    <script src="movement-comparer.js"></script>
+    <script src="score-manager.js"></script>
+    <script src="app.js"></script>
+</body>
 </html>
+

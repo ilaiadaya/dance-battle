@@ -1,0 +1,318 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pose Data Analyzer</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            padding: 20px;
+            background: #1a1a1a;
+            color: #fff;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        h1 {
+            text-align: center;
+        }
+        .controls {
+            margin: 20px 0;
+            text-align: center;
+        }
+        button {
+            padding: 10px 20px;
+            margin: 5px;
+            font-size: 16px;
+            cursor: pointer;
+            background: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 5px;
+        }
+        button:hover {
+            background: #45a049;
+        }
+        .canvas-container {
+            display: flex;
+            gap: 20px;
+            margin: 20px 0;
+        }
+        .canvas-wrapper {
+            flex: 1;
+            background: #2a2a2a;
+            padding: 10px;
+            border-radius: 8px;
+        }
+        canvas {
+            width: 100%;
+            height: auto;
+            background: #000;
+            border: 2px solid #444;
+            display: block;
+        }
+        .info {
+            background: #2a2a2a;
+            padding: 15px;
+            border-radius: 8px;
+            margin: 20px 0;
+        }
+        .info-item {
+            margin: 5px 0;
+        }
+        input[type="range"] {
+            width: 100%;
+        }
+        .slider-label {
+            display: flex;
+            justify-content: space-between;
+            margin: 10px 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🎭 Pose Data Visualizer</h1>
+        
+        <div class="controls">
+            <button onclick="loadPoses('danceone')">Load danceone.json</button>
+            <button onclick="loadPoses('dancetwo')">Load dancetwo.json</button>
+            <button onclick="playAnimation()">Play Animation</button>
+            <button onclick="stopAnimation()">Stop</button>
+        </div>
+
+        <div class="slider-label">
+            <span>Frame: <span id="frameNumber">0</span> / <span id="totalFrames">0</span></span>
+            <input type="range" id="frameSlider" min="0" max="0" value="0" oninput="setFrame(this.value)">
+        </div>
+
+        <div class="canvas-container">
+            <div class="canvas-wrapper">
+                <h3>Pose Visualization</h3>
+                <canvas id="poseCanvas" width="640" height="480"></canvas>
+            </div>
+        </div>
+
+        <div class="info">
+            <h3>Frame Information</h3>
+            <div class="info-item">Total Frames: <span id="infoFrames">0</span></div>
+            <div class="info-item">Valid Landmarks: <span id="infoValid">0</span></div>
+            <div class="info-item">Low Visibility Landmarks: <span id="infoLowVis">0</span></div>
+            <div class="info-item">Zero Coordinates: <span id="infoZero">0</span></div>
+            <div class="info-item">Average Visibility: <span id="infoAvgVis">0</span></div>
+        </div>
+    </div>
+
+    <script>
+        let poses = [];
+        let currentFrame = 0;
+        let animationId = null;
+        let isPlaying = false;
+
+        const POSE_CONNECTIONS = [
+            // Face
+            [0, 1], [1, 2], [2, 3], [3, 7],
+            [0, 4], [4, 5], [5, 6], [6, 8],
+            [9, 10],
+            // Torso
+            [11, 12], [11, 23], [12, 24], [23, 24],
+            // Left arm
+            [11, 13], [13, 15], [15, 17], [15, 19], [15, 21], [17, 19], [19, 21],
+            // Right arm
+            [12, 14], [14, 16], [16, 18], [16, 20], [16, 22], [18, 20], [20, 22],
+            // Left leg
+            [23, 25], [25, 27], [27, 29], [27, 31], [29, 31],
+            // Right leg
+            [24, 26], [26, 28], [28, 30], [28, 32], [30, 32]
+        ];
+
+        async function loadPoses(name) {
+            try {
+                const response = await fetch(`/poses/${name}.json`);
+                if (!response.ok) {
+                    throw new Error(`Failed to load: ${response.statusText}`);
+                }
+                poses = await response.json();
+                
+                if (!Array.isArray(poses) || poses.length === 0) {
+                    throw new Error('Invalid pose data format');
+                }
+
+                document.getElementById('totalFrames').textContent = poses.length;
+                document.getElementById('infoFrames').textContent = poses.length;
+                document.getElementById('frameSlider').max = poses.length - 1;
+                
+                currentFrame = 0;
+                setFrame(0);
+                
+                console.log(`Loaded ${poses.length} frames`);
+                console.log('First frame sample:', poses[0]?.slice(0, 5));
+            } catch (error) {
+                console.error('Error loading poses:', error);
+                alert('Error loading poses: ' + error.message);
+            }
+        }
+
+        function setFrame(frameIndex) {
+            if (!poses || poses.length === 0) return;
+            
+            currentFrame = Math.max(0, Math.min(parseInt(frameIndex), poses.length - 1));
+            document.getElementById('frameNumber').textContent = currentFrame;
+            document.getElementById('frameSlider').value = currentFrame;
+            
+            drawPose(poses[currentFrame]);
+            updateInfo(poses[currentFrame]);
+        }
+
+        function drawPose(landmarks) {
+            const canvas = document.getElementById('poseCanvas');
+            const ctx = canvas.getContext('2d');
+            
+            // Set canvas size
+            canvas.width = 640;
+            canvas.height = 480;
+            
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            
+            if (!landmarks || !Array.isArray(landmarks)) {
+                ctx.fillStyle = '#ff0000';
+                ctx.font = '24px Arial';
+                ctx.fillText('Invalid landmarks data', 50, 50);
+                return;
+            }
+
+            const minVisibility = 0.1;
+
+            // Draw connections
+            ctx.strokeStyle = '#00FF00';
+            ctx.lineWidth = 3;
+
+            POSE_CONNECTIONS.forEach(([start, end]) => {
+                const startPoint = landmarks[start];
+                const endPoint = landmarks[end];
+
+                if (startPoint && endPoint) {
+                    const startVis = startPoint.visibility !== undefined ? startPoint.visibility : 1;
+                    const endVis = endPoint.visibility !== undefined ? endPoint.visibility : 1;
+                    
+                    if (startVis >= minVisibility && endVis >= minVisibility) {
+                        // Skip if coordinates are invalid
+                        if (startPoint.x === 0 && startPoint.y === 0 && startVis === 0) return;
+                        if (endPoint.x === 0 && endPoint.y === 0 && endVis === 0) return;
+                        
+                        ctx.beginPath();
+                        ctx.moveTo(
+                            startPoint.x * canvas.width,
+                            startPoint.y * canvas.height
+                        );
+                        ctx.lineTo(
+                            endPoint.x * canvas.width,
+                            endPoint.y * canvas.height
+                        );
+                        ctx.stroke();
+                    }
+                }
+            });
+
+            // Draw landmarks
+            ctx.fillStyle = '#FF0000';
+            landmarks.forEach((landmark, index) => {
+                if (!landmark) return;
+                
+                const visibility = landmark.visibility !== undefined ? landmark.visibility : 1;
+                
+                if (visibility >= minVisibility) {
+                    if (landmark.x === 0 && landmark.y === 0 && visibility === 0) return;
+                    
+                    const x = landmark.x * canvas.width;
+                    const y = landmark.y * canvas.height;
+
+                    // Color based on visibility
+                    const alpha = Math.min(visibility * 2, 1);
+                    ctx.fillStyle = `rgba(255, 0, 0, ${alpha})`;
+                    
+                    ctx.beginPath();
+                    ctx.arc(x, y, 5, 0, 2 * Math.PI);
+                    ctx.fill();
+                }
+            });
+        }
+
+        function updateInfo(landmarks) {
+            if (!landmarks || !Array.isArray(landmarks)) return;
+
+            let validCount = 0;
+            let lowVisCount = 0;
+            let zeroCount = 0;
+            let totalVisibility = 0;
+            const minVisibility = 0.1;
+
+            landmarks.forEach(landmark => {
+                if (!landmark) return;
+                
+                const visibility = landmark.visibility !== undefined ? landmark.visibility : 1;
+                totalVisibility += visibility;
+                
+                if (visibility >= minVisibility && (landmark.x !== 0 || landmark.y !== 0 || visibility > 0)) {
+                    validCount++;
+                } else if (visibility > 0 && visibility < minVisibility) {
+                    lowVisCount++;
+                }
+                
+                if (landmark.x === 0 && landmark.y === 0 && visibility === 0) {
+                    zeroCount++;
+                }
+            });
+
+            document.getElementById('infoValid').textContent = validCount;
+            document.getElementById('infoLowVis').textContent = lowVisCount;
+            document.getElementById('infoZero').textContent = zeroCount;
+            document.getElementById('infoAvgVis').textContent = (totalVisibility / landmarks.length).toFixed(3);
+        }
+
+        function playAnimation() {
+            if (isPlaying) return;
+            if (poses.length === 0) {
+                alert('Please load pose data first');
+                return;
+            }
+            
+            isPlaying = true;
+            const fps = 30;
+            const frameDelay = 1000 / fps;
+            let lastTime = Date.now();
+
+            function animate() {
+                if (!isPlaying) return;
+
+                const now = Date.now();
+                if (now - lastTime >= frameDelay) {
+                    currentFrame = (currentFrame + 1) % poses.length;
+                    setFrame(currentFrame);
+                    lastTime = now;
+                }
+
+                animationId = requestAnimationFrame(animate);
+            }
+
+            animate();
+        }
+
+        function stopAnimation() {
+            isPlaying = false;
+            if (animationId) {
+                cancelAnimationFrame(animationId);
+                animationId = null;
+            }
+        }
+    </script>
+</body>
+</html>
+
+
+
+
+
+

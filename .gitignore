@@ -1,10 +1,41 @@
+# Dependencies
 node_modules/
-dist/
+package-lock.json
+
+# Environment variables
 .env
 .env.local
-.DS_Store
-*.log
-temp-frames/
+.env.*.local
 
-public/poses/
-public/danceone.mp4
+# Database files
+*.db
+*.sqlite
+*.sqlite3
+
+# Large data files
+*.mp4
+*.json
+!package.json
+!package-lock.json
+
+# Temporary files
+temp-frames/
+.DS_Store
+*.png
+*.jpg
+*.jpeg
+
+# Build outputs
+dist/
+*.log
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Screenshots
+*.png
+Screenshot*
+

@@ -1,59 +1,76 @@
 # Dance Battle App
 
-A React-based dance battle application that uses pose detection to compare your movements with a reference dance video.
+A real-time dance battle app that analyzes your movements against reference dance videos using pose detection.
+
+## Setup
+
+### 1. Install Dependencies
+```bash
+npm install
+```
+
+### 2. Configure Database Connection
+
+Create a `.env` file in the root directory with your PostgreSQL connection string:
+
+```env
+DATABASE_URL=postgresql://neondb_owner:YOUR_PASSWORD@ep-noisy-recipe-a4cxmlpx-pooler.us-east-1.aws.neon.tech/neondb?sslmode=require&channel_binding=require
+PORT=3000
+```
+
+Replace `YOUR_PASSWORD` with your actual database password.
+
+### 3. Import Existing Pose Data (Optional)
+
+If you have existing JSON files with pose data, import them to the database:
+
+```bash
+node import-poses-pg.js
+```
+
+This will import `danceone.json` and `dancetwo.json` into the PostgreSQL database.
+
+### 4. Start the Server
+
+```bash
+npm start
+```
+
+The server will run on `http://localhost:3000`
+
+### 5. Access the App
+
+Open your browser and navigate to:
+```
+http://localhost:3000/index.html
+```
 
 ## Features
 
 - Real-time pose detection using MediaPipe
 - Movement comparison and scoring
-- PostgreSQL database for storing analyzed pose data
+- Support for multiple dance videos
+- Pose data stored in PostgreSQL database
 - Visual feedback for good matches
-- Railway deployment ready
+- Mirrored camera view
 
-## Setup
+## API Endpoints
 
-1. Install dependencies:
-```bash
-npm install
+- `GET /api/poses/:danceName` - Get poses for a specific dance
+- `POST /api/poses/:danceName` - Save poses for a specific dance
+- `GET /api/dances` - List all available dances
+- `GET /api/poses/:danceName/exists` - Check if poses exist for a dance
+
+## Database Schema
+
+```sql
+CREATE TABLE poses (
+    id SERIAL PRIMARY KEY,
+    dance_name VARCHAR(255) UNIQUE NOT NULL,
+    pose_data JSONB NOT NULL,
+    frame_count INTEGER,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
 ```
-
-2. Set up environment variables:
-```bash
-cp .env.example .env
-# Edit .env with your DATABASE_URL
-```
-
-3. Run development server:
-```bash
-npm run dev
-```
-
-4. Run backend server (in another terminal):
-```bash
-npm run server
-```
-
-## Database Setup
-
-The app uses PostgreSQL to store analyzed pose data. On first load, if pose data doesn't exist in the database, it will automatically analyze the reference video and save it.
-
-Make sure your `DATABASE_URL` is set in your `.env` file or Railway environment variables.
-
-## Deployment on Railway
-
-1. Connect your GitHub repository to Railway
-2. Add a PostgreSQL service
-3. Set the `DATABASE_URL` environment variable
-4. Deploy!
-
-The app will automatically:
-- Check for existing pose data on first load
-- Analyze and save pose data if not found
-- Use saved data on subsequent loads
-
-## Project Structure
-
-- `src/` - React application source code
-- `server/` - Express backend with PostgreSQL integration
-- `public/` - Static assets (videos, etc.)
 

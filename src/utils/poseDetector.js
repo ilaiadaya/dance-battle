@@ -125,36 +125,67 @@ export class PoseDetector {
 
   drawConnections(ctx, landmarks, connections) {
     ctx.strokeStyle = '#00FF00';
-    ctx.lineWidth = 2;
+    ctx.lineWidth = 3;
+
+    const minVisibility = 0.1; // Minimum visibility threshold
 
     connections.forEach(([start, end]) => {
       const startPoint = landmarks[start];
       const endPoint = landmarks[end];
 
       if (startPoint && endPoint) {
-        ctx.beginPath();
-        ctx.moveTo(
-          startPoint.x * ctx.canvas.width,
-          startPoint.y * ctx.canvas.height
-        );
-        ctx.lineTo(
-          endPoint.x * ctx.canvas.width,
-          endPoint.y * ctx.canvas.height
-        );
-        ctx.stroke();
+        // Check visibility for both points
+        const startVis = startPoint.visibility !== undefined ? startPoint.visibility : 1;
+        const endVis = endPoint.visibility !== undefined ? endPoint.visibility : 1;
+        
+        // Only draw if both points have sufficient visibility
+        if (startVis >= minVisibility && endVis >= minVisibility) {
+          // Skip if coordinates are invalid (0,0 with 0 visibility usually means not detected)
+          if (startPoint.x === 0 && startPoint.y === 0 && startVis === 0) return;
+          if (endPoint.x === 0 && endPoint.y === 0 && endVis === 0) return;
+          
+          ctx.beginPath();
+          ctx.moveTo(
+            startPoint.x * ctx.canvas.width,
+            startPoint.y * ctx.canvas.height
+          );
+          ctx.lineTo(
+            endPoint.x * ctx.canvas.width,
+            endPoint.y * ctx.canvas.height
+          );
+          ctx.stroke();
+        }
       }
     });
   }
 
   drawLandmarks(ctx, landmarks) {
     ctx.fillStyle = '#FF0000';
-    landmarks.forEach((landmark) => {
-      const x = landmark.x * ctx.canvas.width;
-      const y = landmark.y * ctx.canvas.height;
+    const minVisibility = 0.1; // Minimum visibility threshold
 
-      ctx.beginPath();
-      ctx.arc(x, y, 3, 0, 2 * Math.PI);
-      ctx.fill();
+    landmarks.forEach((landmark) => {
+      if (!landmark) return;
+      
+      const visibility = landmark.visibility !== undefined ? landmark.visibility : 1;
+      
+      // Only draw if visibility is sufficient
+      if (visibility >= minVisibility) {
+        // Skip if coordinates are invalid
+        if (landmark.x === 0 && landmark.y === 0 && visibility === 0) return;
+        
+        const x = landmark.x * ctx.canvas.width;
+        const y = landmark.y * ctx.canvas.height;
+
+        // Adjust alpha based on visibility for better visualization
+        const alpha = Math.min(visibility * 2, 1);
+        ctx.globalAlpha = alpha;
+
+        ctx.beginPath();
+        ctx.arc(x, y, 4, 0, 2 * Math.PI);
+        ctx.fill();
+        
+        ctx.globalAlpha = 1.0; // Reset alpha
+      }
     });
   }
 
@@ -164,7 +195,10 @@ export class PoseDetector {
 
   drawStoredLandmarks(landmarks, canvasElement) {
     if (!landmarks || !canvasElement) {
-      console.warn('drawStoredLandmarks: missing landmarks or canvas');
+      console.warn('drawStoredLandmarks: missing landmarks or canvas', { 
+        landmarks: !!landmarks, 
+        canvas: !!canvasElement 
+      });
       return;
     }
 
@@ -176,14 +210,64 @@ export class PoseDetector {
 
     ctx.save();
     
-    // Ensure canvas is sized correctly
+    // Ensure canvas is sized correctly - try multiple methods
     const rect = canvasElement.getBoundingClientRect();
-    if (canvasElement.width !== rect.width || canvasElement.height !== rect.height) {
-      canvasElement.width = rect.width;
-      canvasElement.height = rect.height;
+    let canvasWidth = rect.width;
+    let canvasHeight = rect.height;
+    
+    // If rect is 0, try to get size from parent or video
+    if (canvasWidth === 0 || canvasHeight === 0) {
+      const parent = canvasElement.parentElement;
+      if (parent) {
+        const parentRect = parent.getBoundingClientRect();
+        canvasWidth = parentRect.width || 640;
+        canvasHeight = parentRect.height || 480;
+      }
+      
+      // Try to find video element in parent
+      const video = canvasElement.parentElement?.querySelector('video');
+      if (video && video.videoWidth && video.videoHeight) {
+        canvasWidth = video.videoWidth;
+        canvasHeight = video.videoHeight;
+      }
+    }
+    
+    // Fallback to default size if still 0
+    if (canvasWidth === 0 || canvasHeight === 0) {
+      canvasWidth = 640;
+      canvasHeight = 480;
+    }
+    
+    if (canvasElement.width !== canvasWidth || canvasElement.height !== canvasHeight) {
+      canvasElement.width = canvasWidth;
+      canvasElement.height = canvasHeight;
     }
     
     ctx.clearRect(0, 0, canvasElement.width, canvasElement.height);
+
+    // Validate landmarks array
+    if (!Array.isArray(landmarks) || landmarks.length === 0) {
+      console.warn('drawStoredLandmarks: invalid landmarks array', landmarks);
+      ctx.restore();
+      return;
+    }
+
+    // Debug: log first frame occasionally
+    if (Math.random() < 0.01) {
+      const validCount = landmarks.filter(l => 
+        l && l.visibility >= 0.1 && !(l.x === 0 && l.y === 0 && l.visibility === 0)
+      ).length;
+      console.log('Drawing stored landmarks:', {
+        total: landmarks.length,
+        valid: validCount,
+        canvasSize: `${canvasElement.width}x${canvasElement.height}`,
+        sample: landmarks.slice(0, 3).map(l => ({
+          x: l.x,
+          y: l.y,
+          visibility: l.visibility
+        }))
+      });
+    }
 
     this.drawConnections(ctx, landmarks, POSE_CONNECTIONS);
     this.drawLandmarks(ctx, landmarks);
@@ -209,4 +293,9 @@ export class PoseDetector {
     });
   }
 }
+
+
+
+
+
 

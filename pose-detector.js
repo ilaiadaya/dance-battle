@@ -2,8 +2,6 @@ class PoseDetector {
     constructor() {
         this.pose = null;
         this.isInitialized = false;
-        this.pendingResolves = [];
-        this.currentCanvas = null;
     }
 
     async initialize() {
@@ -36,20 +34,6 @@ class PoseDetector {
             minTrackingConfidence: 0.5
         });
 
-        // Set up the results callback once
-        this.pose.onResults((results) => {
-            // Draw on the current canvas if provided
-            if (this.currentCanvas) {
-                this.drawPose(results, this.currentCanvas);
-            }
-            
-            // Resolve any pending promises
-            const resolve = this.pendingResolves.shift();
-            if (resolve) {
-                resolve(results);
-            }
-        });
-
         this.isInitialized = true;
     }
 
@@ -59,13 +43,11 @@ class PoseDetector {
         }
 
         return new Promise((resolve) => {
-            // Store the canvas for drawing
-            this.currentCanvas = canvasElement;
-            
-            // Add to pending resolves queue
-            this.pendingResolves.push(resolve);
+            this.pose.onResults((results) => {
+                this.drawPose(results, canvasElement);
+                resolve(results);
+            });
 
-            // Send the image for processing
             this.pose.send({ image: imageElement });
         });
     }
@@ -169,18 +151,10 @@ class PoseDetector {
         }
 
         return new Promise((resolve) => {
-            // Don't draw for analysis
-            const previousCanvas = this.currentCanvas;
-            this.currentCanvas = null;
-            
-            // Add to pending resolves queue
-            this.pendingResolves.push((results) => {
-                // Restore canvas setting
-                this.currentCanvas = previousCanvas;
+            this.pose.onResults((results) => {
                 resolve(results);
             });
 
-            // Send the image for processing
             this.pose.send({ image: imageElement });
         });
     }

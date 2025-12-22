@@ -2,6 +2,7 @@ class MovementComparer {
     constructor() {
         this.referencePoses = [];
         this.currentFrameIndex = 0;
+        this.movementThreshold = 0.02; // Minimum movement to consider active (2% of frame)
     }
 
     setReferencePoses(poses) {
@@ -81,6 +82,62 @@ class MovementComparer {
 
     reset() {
         this.currentFrameIndex = 0;
+    }
+
+    // Check if there's significant movement between two poses
+    hasSignificantMovement(pose1, pose2) {
+        if (!pose1 || !pose2) return false;
+
+        let totalMovement = 0;
+        let validPoints = 0;
+
+        // Key body points to check for movement
+        const keyPoints = [11, 12, 13, 14, 15, 16, 23, 24, 25, 26, 27, 28]; // shoulders, elbows, wrists, hips, knees, ankles
+
+        keyPoints.forEach((index) => {
+            const point1 = pose1[index];
+            const point2 = pose2[index];
+
+            if (point1 && point2 && 
+                point1.visibility > 0.5 && point2.visibility > 0.5) {
+                const dx = point2.x - point1.x;
+                const dy = point2.y - point1.y;
+                const distance = Math.sqrt(dx * dx + dy * dy);
+                totalMovement += distance;
+                validPoints++;
+            }
+        });
+
+        if (validPoints === 0) return false;
+
+        const averageMovement = totalMovement / validPoints;
+        return averageMovement > this.movementThreshold;
+    }
+
+    // Check if a pose has a full body (enough key points detected)
+    hasFullBody(landmarks) {
+        if (!landmarks || landmarks.length < 33) return false;
+
+        // Check for key body parts
+        const requiredPoints = [
+            11, 12, // shoulders
+            23, 24, // hips
+            13, 14, // elbows (at least one)
+            15, 16, // wrists (at least one)
+            25, 26, // knees (at least one)
+            27, 28  // ankles (at least one)
+        ];
+
+        let detectedPoints = 0;
+        requiredPoints.forEach((index) => {
+            const point = landmarks[index];
+            if (point && point.visibility > 0.5) {
+                detectedPoints++;
+            }
+        });
+
+        // Need at least 6 out of 10 key points for full body
+        return detectedPoints >= 6;
     }
 }
 

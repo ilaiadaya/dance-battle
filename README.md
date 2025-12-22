@@ -4,6 +4,8 @@ A real-time dance battle app that analyzes your movements against reference danc
 
 ## Setup
 
+### Local Development
+
 ### 1. Install Dependencies
 ```bash
 npm install
@@ -60,6 +62,30 @@ http://localhost:3000/index.html
 - `POST /api/poses/:danceName` - Save poses for a specific dance
 - `GET /api/dances` - List all available dances
 - `GET /api/poses/:danceName/exists` - Check if poses exist for a dance
+
+## Railway Deployment
+
+### 1. Connect to Railway
+- Push your code to GitHub
+- Connect your GitHub repo to Railway
+- Railway will automatically detect the Node.js app
+
+### 2. Set Environment Variables
+In Railway dashboard, add these environment variables:
+- `DATABASE_URL` - Your PostgreSQL connection string
+- `PORT` - Railway will set this automatically (optional to set manually)
+- `NODE_ENV` - Set to `production` (optional)
+
+### 3. Deploy
+Railway will automatically:
+- Install dependencies from `package.json`
+- Run `node server.js` (from Procfile)
+- Serve your app on Railway's domain
+
+### 4. Database Setup
+Make sure your PostgreSQL database is accessible from Railway. You can:
+- Use Railway's PostgreSQL service
+- Use an external database (like Neon) - ensure it allows connections from Railway's IPs
 
 ## Database Schema
 

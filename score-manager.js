@@ -4,22 +4,26 @@ class ScoreManager {
         this.targetScore = targetScore;
         this.onScoreUpdate = null;
         this.onWin = null;
+        this.hasWon = false;
     }
 
     addPoints(points) {
-        this.score = Math.min(this.score + points, this.targetScore);
+        this.score = this.score + points; // Remove cap, let it keep going
         
         if (this.onScoreUpdate) {
             this.onScoreUpdate(this.score, this.targetScore);
         }
 
-        if (this.score >= this.targetScore && this.onWin) {
+        // Only trigger win once when reaching target, but keep scoring
+        if (this.score >= this.targetScore && !this.hasWon && this.onWin) {
+            this.hasWon = true;
             this.onWin();
         }
     }
 
     reset() {
         this.score = 0;
+        this.hasWon = false;
         if (this.onScoreUpdate) {
             this.onScoreUpdate(this.score, this.targetScore);
         }

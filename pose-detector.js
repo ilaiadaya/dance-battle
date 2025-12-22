@@ -92,7 +92,11 @@ class PoseDetector {
             const startPoint = landmarks[start];
             const endPoint = landmarks[end];
 
-            if (startPoint && endPoint) {
+            // Only draw if both points exist, have visibility > 0.5, and are not at origin (0,0)
+            if (startPoint && endPoint && 
+                startPoint.visibility > 0.5 && endPoint.visibility > 0.5 &&
+                (startPoint.x !== 0 || startPoint.y !== 0) &&
+                (endPoint.x !== 0 || endPoint.y !== 0)) {
                 ctx.beginPath();
                 ctx.moveTo(
                     startPoint.x * ctx.canvas.width,
@@ -110,12 +114,16 @@ class PoseDetector {
     drawLandmarks(ctx, landmarks) {
         ctx.fillStyle = '#FF0000';
         landmarks.forEach((landmark) => {
-            const x = landmark.x * ctx.canvas.width;
-            const y = landmark.y * ctx.canvas.height;
+            // Only draw if landmark has good visibility and is not at origin
+            if (landmark && landmark.visibility > 0.5 && 
+                (landmark.x !== 0 || landmark.y !== 0)) {
+                const x = landmark.x * ctx.canvas.width;
+                const y = landmark.y * ctx.canvas.height;
 
-            ctx.beginPath();
-            ctx.arc(x, y, 3, 0, 2 * Math.PI);
-            ctx.fill();
+                ctx.beginPath();
+                ctx.arc(x, y, 3, 0, 2 * Math.PI);
+                ctx.fill();
+            }
         });
     }
 

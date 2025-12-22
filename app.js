@@ -17,6 +17,7 @@ class DanceBattleApp {
         this.matchIndicator = document.getElementById('matchIndicator');
         this.matchOverlay = document.getElementById('matchOverlay');
         this.danceSelect = document.getElementById('danceSelect');
+        this.videoProgressBar = document.getElementById('videoProgressBar');
         
         this.isRunning = false;
         this.camera = null;
@@ -24,18 +25,49 @@ class DanceBattleApp {
         this.isAnalyzingReference = false;
         this.lastSimilarity = 0;
         this.currentDanceName = 'dancetwo';
+        this.cameraPermissionGranted = false;
+        this.startTime = null;
+        this.hasWon = false;
         
-        // API base URL
-        this.API_BASE = 'http://localhost:3000/api';
+        // API base URL - use relative URL in production, absolute in development
+        this.API_BASE = window.location.hostname === 'localhost' 
+            ? 'http://localhost:3000/api' 
+            : '/api';
         
         this.setupEventListeners();
         this.setupScoreManager();
+        
+        // Request camera permission early
+        this.requestCameraPermission();
     }
 
     setupEventListeners() {
         this.startBtn.addEventListener('click', () => this.start());
         this.stopBtn.addEventListener('click', () => this.stop());
         this.danceSelect.addEventListener('change', () => this.onDanceChange());
+    }
+
+    async requestCameraPermission() {
+        try {
+            this.statusEl.textContent = 'Please allow camera access to continue...';
+            const stream = await navigator.mediaDevices.getUserMedia({
+                video: { 
+                    width: { ideal: 640 },
+                    height: { ideal: 480 },
+                    facingMode: 'user'
+                }
+            });
+            
+            // Show the camera feed immediately
+            this.cameraVideo.srcObject = stream;
+            this.camera = stream;
+            this.cameraPermissionGranted = true;
+            this.statusEl.textContent = 'Camera access granted! Ready to start.';
+        } catch (error) {
+            console.error('Camera permission denied:', error);
+            this.cameraPermissionGranted = false;
+            this.statusEl.textContent = 'Camera access is required. Please allow camera access and refresh the page.';
+        }
     }
 
     onDanceChange() {
@@ -47,7 +79,79 @@ class DanceBattleApp {
         this.referenceVideo.src = `public/${selectedDance}.mp4`;
         this.referenceVideo.load(); // Force reload
         
+        // Reset progress bar
+        if (this.videoProgressBar) {
+            this.videoProgressBar.style.width = '0%';
+        }
+        
         this.statusEl.textContent = `Switched to ${selectedDance}. Ready to start.`;
+    }
+
+    async waitForFullBodyDetection() {
+        // Check a few frames from the video to find a full body pose
+        const video = this.referenceVideo;
+        const originalTime = video.currentTime;
+        const checkInterval = 0.5; // Check every 0.5 seconds
+        const maxChecks = 10; // Check up to 5 seconds of video
+        
+        for (let i = 0; i < maxChecks; i++) {
+            video.currentTime = i * checkInterval;
+            
+            // Wait for video to seek
+            await new Promise((resolve) => {
+                const onSeeked = () => {
+                    video.removeEventListener('seeked', onSeeked);
+                    setTimeout(resolve, 100); // Give it time to render
+                };
+                video.addEventListener('seeked', onSeeked, { once: true });
+            });
+            
+            // Detect pose in current frame
+            const results = await this.poseDetector.detectPoseOnly(video);
+            const landmarks = this.poseDetector.getPoseLandmarks(results);
+            
+            if (landmarks && this.movementComparer.hasFullBody(landmarks)) {
+                // Found full body, reset video to start
+                video.currentTime = 0;
+                await new Promise((resolve) => {
+                    const onSeeked = () => {
+                        video.removeEventListener('seeked', onSeeked);
+                        resolve();
+                    };
+                    video.addEventListener('seeked', onSeeked, { once: true });
+                });
+                return; // Full body detected, ready to start
+            }
+        }
+        
+        // If we didn't find full body, reset and continue anyway
+        video.currentTime = 0;
+        await new Promise((resolve) => {
+            const onSeeked = () => {
+                video.removeEventListener('seeked', onSeeked);
+                resolve();
+            };
+            video.addEventListener('seeked', onSeeked, { once: true });
+        });
+    }
+
+    setupVideoListeners() {
+        // Update progress bar as video plays
+        this.referenceVideo.addEventListener('timeupdate', () => {
+            if (this.referenceVideo.duration) {
+                const progress = (this.referenceVideo.currentTime / this.referenceVideo.duration) * 100;
+                if (this.videoProgressBar) {
+                    this.videoProgressBar.style.width = `${progress}%`;
+                }
+            }
+        });
+
+        // Stop when video ends (don't loop)
+        this.referenceVideo.addEventListener('ended', () => {
+            if (this.isRunning) {
+                this.statusEl.textContent = 'Video finished! Great job!';
+            }
+        });
     }
 
     setupScoreManager() {
@@ -57,8 +161,11 @@ class DanceBattleApp {
         };
 
         this.scoreManager.onWin = () => {
-            this.statusEl.textContent = '🎉 You Win! Great dancing! 🎉';
-            this.stop();
+            if (!this.hasWon) {
+                this.hasWon = true;
+                const timeTaken = (Date.now() - this.startTime) / 1000;
+                this.statusEl.textContent = `🎉 WOW ${timeTaken.toFixed(1)} seconds! Keep going! 🎉`;
+            }
         };
     }
 
@@ -72,8 +179,10 @@ class DanceBattleApp {
             // Initialize pose detector
             await this.poseDetector.initialize();
 
-            // Start camera
-            await this.startCamera();
+            // Start camera (if not already started from permission request)
+            if (!this.camera || !this.camera.active) {
+                await this.startCamera();
+            }
 
             // Try to load saved poses from database first
             if (this.referencePoses.length === 0) {
@@ -113,9 +222,18 @@ class DanceBattleApp {
                 }
             });
             
+            // Wait for full body detection in reference video before starting
+            this.statusEl.textContent = 'Detecting dancer in video...';
+            await this.waitForFullBodyDetection();
+            
             this.statusEl.textContent = 'Dance battle started! Follow the moves!';
             this.isRunning = true;
             this.stopBtn.disabled = false;
+            this.startTime = Date.now();
+            this.hasWon = false;
+            
+            // Set up video event listeners
+            this.setupVideoListeners();
             
             // Play video with error handling
             try {
@@ -310,22 +428,39 @@ class DanceBattleApp {
 
                 // Compare and score
                 if (userLandmarks && referenceLandmarks) {
-                    const similarity = this.movementComparer.comparePoses(
-                        userLandmarks, 
+                    // Get previous frame for movement detection
+                    const videoTime = this.referenceVideo.currentTime;
+                    const videoDuration = this.referenceVideo.duration;
+                    const currentFrameIndex = Math.floor(
+                        (videoTime / videoDuration) * this.referencePoses.length
+                    ) % this.referencePoses.length;
+                    const prevFrameIndex = currentFrameIndex > 0 ? currentFrameIndex - 1 : this.referencePoses.length - 1;
+                    const previousLandmarks = this.referencePoses[prevFrameIndex];
+                    
+                    // Only award points if there's significant movement in the reference video
+                    const hasMovement = this.movementComparer.hasSignificantMovement(
+                        previousLandmarks, 
                         referenceLandmarks
                     );
-
-                    // Show visual feedback for good matches
-                    this.showMatchFeedback(similarity);
-
-                    // Award points based on similarity
-                    // Similarity is 0-1, so we multiply by a base point value
-                    const points = Math.floor(similarity * 10);
-                    if (points > 0) {
-                        this.scoreManager.addPoints(points);
-                    }
                     
-                    this.lastSimilarity = similarity;
+                    if (hasMovement) {
+                        const similarity = this.movementComparer.comparePoses(
+                            userLandmarks, 
+                            referenceLandmarks
+                        );
+
+                        // Show visual feedback for good matches
+                        this.showMatchFeedback(similarity);
+
+                        // Award points based on similarity
+                        // Similarity is 0-1, so we multiply by a base point value
+                        const points = Math.floor(similarity * 10);
+                        if (points > 0) {
+                            this.scoreManager.addPoints(points);
+                        }
+                        
+                        this.lastSimilarity = similarity;
+                    }
                 }
             }
 
@@ -339,18 +474,41 @@ class DanceBattleApp {
 
     stop() {
         this.isRunning = false;
-        this.referenceVideo.pause();
         
+        // Stop and reset video
+        this.referenceVideo.pause();
+        this.referenceVideo.currentTime = 0;
+        
+        // Stop camera
         if (this.camera) {
             this.camera.getTracks().forEach(track => track.stop());
             this.camera = null;
         }
-
         this.cameraVideo.srcObject = null;
+        
+        // Clear canvases
+        const refCtx = this.referenceCanvas.getContext('2d');
+        const camCtx = this.cameraCanvas.getContext('2d');
+        refCtx.clearRect(0, 0, this.referenceCanvas.width, this.referenceCanvas.height);
+        camCtx.clearRect(0, 0, this.cameraCanvas.width, this.cameraCanvas.height);
+        
+        // Reset score and state
+        this.scoreManager.reset();
+        this.referencePoses = [];
+        this.movementComparer.setReferencePoses([]);
+        this.lastSimilarity = 0;
+        this.startTime = null;
+        this.hasWon = false;
+        
+        // Reset progress bar
+        if (this.videoProgressBar) {
+            this.videoProgressBar.style.width = '0%';
+        }
+        
+        // Reset UI
         this.startBtn.disabled = false;
         this.stopBtn.disabled = true;
-        this.statusEl.textContent = 'Stopped';
-        this.scoreManager.reset();
+        this.statusEl.textContent = 'Stopped. Everything cleared. Ready to start again.';
         this.hideMatchFeedback();
     }
 

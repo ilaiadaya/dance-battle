@@ -3,6 +3,7 @@ const express = require('express');
 const cors = require('cors');
 const { Pool } = require('pg');
 const bodyParser = require('body-parser');
+const path = require('path');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -180,10 +181,17 @@ app.get('/api/poses/:danceName/exists', async (req, res) => {
     }
 });
 
+// Serve index.html for root route
+app.get('/', (req, res) => {
+    res.sendFile(path.join(__dirname, 'index.html'));
+});
+
 // Start server
-app.listen(PORT, () => {
-    console.log(`🚀 Server running on http://localhost:${PORT}`);
-    console.log(`📱 Access the app at http://localhost:${PORT}/index.html`);
+app.listen(PORT, '0.0.0.0', () => {
+    console.log(`🚀 Server running on port ${PORT}`);
+    if (process.env.NODE_ENV !== 'production') {
+        console.log(`📱 Access the app at http://localhost:${PORT}/index.html`);
+    }
 });
 
 // Graceful shutdown

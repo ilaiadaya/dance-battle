@@ -181,8 +181,13 @@ app.get('/api/poses/:danceName/exists', async (req, res) => {
     }
 });
 
-// Serve index.html for root route
+// Serve landing page for root route
 app.get('/', (req, res) => {
+    res.sendFile(path.join(__dirname, 'landing.html'));
+});
+
+// Serve battle app
+app.get('/battle.html', (req, res) => {
     res.sendFile(path.join(__dirname, 'index.html'));
 });
 

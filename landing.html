@@ -5,169 +5,140 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Dance Battle - AI-Powered Dance Competition</title>
     <link rel="stylesheet" href="landing.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
 </head>
 <body>
     <div class="landing-container">
-        <!-- Animated background -->
-        <div class="animated-bg">
-            <div class="bg-circle circle-1"></div>
-            <div class="bg-circle circle-2"></div>
-            <div class="bg-circle circle-3"></div>
-            <div class="bg-circle circle-4"></div>
-        </div>
-
         <!-- Navigation -->
         <nav class="nav">
-            <div class="nav-logo">💃 Dance Battle</div>
-            <a href="/battle.html" class="nav-cta">Start Dancing</a>
+            <div class="nav-content">
+                <div class="nav-logo">Dance Battle</div>
+                <a href="/battle.html" class="nav-button">Start Dancing</a>
+            </div>
         </nav>
 
         <!-- Hero Section -->
         <section class="hero">
             <div class="hero-content">
-                <div class="hero-badge">
-                    <span class="badge-icon">✨</span>
-                    <span>Powered by AI</span>
-                </div>
-                
+                <div class="hero-tag">AI-Powered</div>
                 <h1 class="hero-title">
-                    <span class="title-line">Now you can</span>
-                    <span class="title-line highlight">dance and compete</span>
-                    <span class="title-line">with your friends</span>
-                    <span class="title-line">through the power of <span class="ai-text">AI</span></span>
+                    Dance and compete<br>
+                    with friends through<br>
+                    the power of <span class="gradient-text">AI</span>
                 </h1>
-
-                <p class="hero-subtitle">
+                <p class="hero-description">
                     The Peloton of dancing. Challenge yourself, compete with friends, and master moves from anywhere—your laptop, phone, or tablet. No studio needed.
                 </p>
-
-                <div class="hero-cta">
-                    <a href="/battle.html" class="cta-button primary">
-                        <span>Start Your Battle</span>
-                        <span class="cta-arrow">→</span>
+                <div class="hero-actions">
+                    <a href="/battle.html" class="btn-primary">
+                        Start Your Battle
+                        <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+                            <path d="M7.5 15L12.5 10L7.5 5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                        </svg>
                     </a>
-                    <a href="#how-it-works" class="cta-button secondary">
-                        See How It Works
-                    </a>
-                </div>
-
-                <div class="hero-stats">
-                    <div class="stat">
-                        <div class="stat-number">∞</div>
-                        <div class="stat-label">Dance Moves</div>
-                    </div>
-                    <div class="stat">
-                        <div class="stat-number">AI</div>
-                        <div class="stat-label">Real-Time Analysis</div>
-                    </div>
-                    <div class="stat">
-                        <div class="stat-number">100%</div>
-                        <div class="stat-label">From Home</div>
-                    </div>
                 </div>
             </div>
-
             <div class="hero-visual">
-                <div class="phone-mockup">
-                    <div class="phone-screen">
-                        <div class="screen-content">
-                            <div class="dance-preview">
-                                <div class="preview-person"></div>
-                                <div class="preview-skeleton"></div>
-                            </div>
-                        </div>
-                    </div>
+                <div class="visual-container">
+                    <div class="dance-silhouette"></div>
                 </div>
             </div>
         </section>
 
         <!-- How It Works -->
-        <section id="how-it-works" class="how-it-works">
-            <h2 class="section-title">How It Works</h2>
-            <div class="steps">
-                <div class="step">
-                    <div class="step-number">1</div>
-                    <div class="step-icon">📱</div>
-                    <h3>Open Anywhere</h3>
-                    <p>Use your laptop, phone, or tablet. No special equipment needed—just your camera.</p>
-                </div>
-                <div class="step">
-                    <div class="step-number">2</div>
-                    <div class="step-icon">🎬</div>
-                    <h3>Watch & Learn</h3>
-                    <p>Follow the reference dance moves. AI tracks every movement in real-time.</p>
-                </div>
-                <div class="step">
-                    <div class="step-number">3</div>
-                    <div class="step-icon">💪</div>
-                    <h3>Dance & Score</h3>
-                    <p>Match the moves and earn points. Compete with friends or beat your own records.</p>
-                </div>
-                <div class="step">
-                    <div class="step-number">4</div>
-                    <div class="step-icon">🏆</div>
-                    <h3>Win & Repeat</h3>
-                    <p>Reach your target score and keep going. The more you dance, the better you get.</p>
+        <section class="section how-it-works">
+            <div class="container">
+                <h2 class="section-title">How It Works</h2>
+                <div class="steps-grid">
+                    <div class="step-card">
+                        <div class="step-number">01</div>
+                        <h3>Open Anywhere</h3>
+                        <p>Use your laptop, phone, or tablet. No special equipment needed—just your camera.</p>
+                    </div>
+                    <div class="step-card">
+                        <div class="step-number">02</div>
+                        <h3>Watch & Learn</h3>
+                        <p>Follow the reference dance moves. AI tracks every movement in real-time.</p>
+                    </div>
+                    <div class="step-card">
+                        <div class="step-number">03</div>
+                        <h3>Dance & Score</h3>
+                        <p>Match the moves and earn points. Compete with friends or beat your own records.</p>
+                    </div>
+                    <div class="step-card">
+                        <div class="step-number">04</div>
+                        <h3>Win & Repeat</h3>
+                        <p>Reach your target score and keep going. The more you dance, the better you get.</p>
+                    </div>
                 </div>
             </div>
         </section>
 
         <!-- Features -->
-        <section class="features">
-            <h2 class="section-title">Why Dance Battle?</h2>
-            <div class="features-grid">
-                <div class="feature-card">
-                    <div class="feature-icon">🤖</div>
-                    <h3>AI-Powered</h3>
-                    <p>Advanced pose detection analyzes your movements with precision, giving you real-time feedback.</p>
-                </div>
-                <div class="feature-card">
-                    <div class="feature-icon">🏠</div>
-                    <h3>From Home</h3>
-                    <p>No gym membership, no studio fees. Dance anywhere, anytime, with just your device.</p>
-                </div>
-                <div class="feature-card">
-                    <div class="feature-icon">👥</div>
-                    <h3>Compete & Share</h3>
-                    <p>Challenge friends, share scores, and see who's the ultimate dance champion.</p>
-                </div>
-                <div class="feature-card">
-                    <div class="feature-icon">📊</div>
-                    <h3>Track Progress</h3>
-                    <p>See your improvement over time. Beat your personal bests and level up your skills.</p>
-                </div>
-                <div class="feature-card">
-                    <div class="feature-icon">🎵</div>
-                    <h3>Multiple Routines</h3>
-                    <p>Choose from various dance routines. New challenges keep you motivated.</p>
-                </div>
-                <div class="feature-card">
-                    <div class="feature-icon">⚡</div>
-                    <h3>Instant Feedback</h3>
-                    <p>Get visual feedback as you dance. Green flashes show when you're nailing the moves.</p>
+        <section class="section features">
+            <div class="container">
+                <h2 class="section-title">Why Dance Battle?</h2>
+                <div class="features-grid">
+                    <div class="feature-card">
+                        <div class="feature-icon">🤖</div>
+                        <h3>AI-Powered</h3>
+                        <p>Advanced pose detection analyzes your movements with precision, giving you real-time feedback.</p>
+                    </div>
+                    <div class="feature-card">
+                        <div class="feature-icon">🏠</div>
+                        <h3>From Home</h3>
+                        <p>No gym membership, no studio fees. Dance anywhere, anytime, with just your device.</p>
+                    </div>
+                    <div class="feature-card">
+                        <div class="feature-icon">👥</div>
+                        <h3>Compete & Share</h3>
+                        <p>Challenge friends, share scores, and see who's the ultimate dance champion.</p>
+                    </div>
+                    <div class="feature-card">
+                        <div class="feature-icon">📊</div>
+                        <h3>Track Progress</h3>
+                        <p>See your improvement over time. Beat your personal bests and level up your skills.</p>
+                    </div>
+                    <div class="feature-card">
+                        <div class="feature-icon">🎵</div>
+                        <h3>Multiple Routines</h3>
+                        <p>Choose from various dance routines. New challenges keep you motivated.</p>
+                    </div>
+                    <div class="feature-card">
+                        <div class="feature-icon">⚡</div>
+                        <h3>Instant Feedback</h3>
+                        <p>Get visual feedback as you dance. Green flashes show when you're nailing the moves.</p>
+                    </div>
                 </div>
             </div>
         </section>
 
-        <!-- CTA Section -->
-        <section class="cta-section">
-            <div class="cta-content">
-                <h2>Ready to Dance?</h2>
-                <p>Join the revolution. Dance, compete, and have fun—all from the comfort of your home.</p>
-                <a href="/battle.html" class="cta-button large">
-                    <span>Start Dancing Now</span>
-                    <span class="cta-arrow">→</span>
-                </a>
+        <!-- CTA -->
+        <section class="section cta-section">
+            <div class="container">
+                <div class="cta-box">
+                    <h2>Ready to Dance?</h2>
+                    <p>Join the revolution. Dance, compete, and have fun—all from the comfort of your home.</p>
+                    <a href="/battle.html" class="btn-primary large">
+                        Start Dancing Now
+                        <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+                            <path d="M7.5 15L12.5 10L7.5 5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                        </svg>
+                    </a>
+                </div>
             </div>
         </section>
 
         <!-- Footer -->
         <footer class="footer">
-            <p>Made with 💃 and AI • Dance Battle 2024</p>
+            <div class="container">
+                <p>Made with 💃 and AI • Dance Battle 2024</p>
+            </div>
         </footer>
     </div>
 
     <script src="landing.js"></script>
 </body>
 </html>
-

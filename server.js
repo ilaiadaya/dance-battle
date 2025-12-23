@@ -11,7 +11,22 @@ const PORT = process.env.PORT || 3000;
 // Middleware
 app.use(cors());
 app.use(bodyParser.json({ limit: '100mb' })); // Large limit for pose data
-app.use(express.static('.')); // Serve static files from root
+
+// Route handlers must come BEFORE static file serving
+// Serve landing page for root route
+app.get('/', (req, res) => {
+    res.sendFile(path.join(__dirname, 'landing.html'));
+});
+
+// Serve battle app
+app.get('/battle.html', (req, res) => {
+    res.sendFile(path.join(__dirname, 'index.html'));
+});
+
+// Serve static files from root (but exclude index.html from auto-serving)
+app.use(express.static('.', {
+    index: false // Don't auto-serve index.html
+}));
 app.use('/public', express.static('public')); // Also serve from public directory
 
 // Initialize PostgreSQL connection

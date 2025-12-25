@@ -250,39 +250,50 @@ class DanceBattleApp {
                             this.referencePoseTimestamps = savedPoses.map((_, index) => index * frameInterval);
                             resolve();
                         } else {
+                            let resolved = false;
+                            
                             // Add error handler in case video fails to load
                             const errorHandler = () => {
-                                console.warn('Video failed to load, using estimated timestamps');
-                                // Use estimated duration based on pose count (assuming 60fps)
-                                const estimatedDuration = savedPoses.length / 60;
-                                const frameInterval = estimatedDuration / savedPoses.length;
-                                this.referencePoseTimestamps = savedPoses.map((_, index) => index * frameInterval);
-                                resolve();
+                                if (!resolved) {
+                                    resolved = true;
+                                    console.warn('Video failed to load, using estimated timestamps');
+                                    // Use estimated duration based on pose count (assuming 60fps)
+                                    const estimatedDuration = savedPoses.length / 60;
+                                    const frameInterval = estimatedDuration / savedPoses.length;
+                                    this.referencePoseTimestamps = savedPoses.map((_, index) => index * frameInterval);
+                                    this.referenceVideo.removeEventListener('loadedmetadata', metadataHandler);
+                                    resolve();
+                                }
+                            };
+                            
+                            const metadataHandler = () => {
+                                if (!resolved) {
+                                    const videoDuration = this.referenceVideo.duration;
+                                    if (videoDuration && videoDuration > 0) {
+                                        resolved = true;
+                                        const frameInterval = videoDuration / savedPoses.length;
+                                        this.referencePoseTimestamps = savedPoses.map((_, index) => index * frameInterval);
+                                        this.referenceVideo.removeEventListener('error', errorHandler);
+                                        resolve();
+                                    } else {
+                                        errorHandler();
+                                    }
+                                }
                             };
                             
                             this.referenceVideo.addEventListener('error', errorHandler, { once: true });
-                            
-                            this.referenceVideo.addEventListener('loadedmetadata', () => {
-                                const videoDuration = this.referenceVideo.duration;
-                                if (videoDuration && videoDuration > 0) {
-                                    const frameInterval = videoDuration / savedPoses.length;
-                                    this.referencePoseTimestamps = savedPoses.map((_, index) => index * frameInterval);
-                                    this.referenceVideo.removeEventListener('error', errorHandler);
-                                    resolve();
-                                } else {
-                                    errorHandler();
-                                }
-                            }, { once: true });
+                            this.referenceVideo.addEventListener('loadedmetadata', metadataHandler, { once: true });
                             
                             // Timeout fallback - if video doesn't load in 5 seconds, use estimated timestamps
                             setTimeout(() => {
-                                if (!this.referencePoseTimestamps || this.referencePoseTimestamps.length === 0) {
+                                if (!resolved) {
+                                    resolved = true;
                                     console.warn('Video metadata timeout, using estimated timestamps');
                                     const estimatedDuration = savedPoses.length / 60;
                                     const frameInterval = estimatedDuration / savedPoses.length;
                                     this.referencePoseTimestamps = savedPoses.map((_, index) => index * frameInterval);
                                     this.referenceVideo.removeEventListener('error', errorHandler);
-                                    this.referenceVideo.removeEventListener('loadedmetadata', () => {});
+                                    this.referenceVideo.removeEventListener('loadedmetadata', metadataHandler);
                                     resolve();
                                 }
                             }, 5000);

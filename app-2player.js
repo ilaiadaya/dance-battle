@@ -291,7 +291,8 @@ class DanceBattleApp2Player {
         }
 
         // Use custom drawing with specified colors
-        this.poseDetector.drawConnections(ctx, landmarks, POSE_CONNECTIONS, lineColor);
+        const connections = typeof POSE_CONNECTIONS !== 'undefined' ? POSE_CONNECTIONS : [];
+        this.poseDetector.drawConnections(ctx, landmarks, connections, lineColor);
         this.poseDetector.drawLandmarks(ctx, landmarks, dotColor);
 
         ctx.restore();
@@ -458,7 +459,10 @@ class DanceBattleApp2Player {
                     this.cameraCanvas1.width = this.cameraCanvas1.offsetWidth;
                     this.cameraCanvas1.height = this.cameraCanvas1.offsetHeight;
                 }
-                this.poseDetector.drawConnections(ctx1, landmarks1, POSE_CONNECTIONS, this.player1Colors.line);
+                // Get POSE_CONNECTIONS from pose-detector (it's defined there)
+                const connections = this.poseDetector.constructor.POSE_CONNECTIONS || 
+                    (typeof POSE_CONNECTIONS !== 'undefined' ? POSE_CONNECTIONS : []);
+                this.poseDetector.drawConnections(ctx1, landmarks1, connections, this.player1Colors.line);
                 this.poseDetector.drawLandmarks(ctx1, landmarks1, this.player1Colors.dot);
                 ctx1.restore();
             }
@@ -472,7 +476,9 @@ class DanceBattleApp2Player {
                     this.cameraCanvas2.width = this.cameraCanvas2.offsetWidth;
                     this.cameraCanvas2.height = this.cameraCanvas2.offsetHeight;
                 }
-                this.poseDetector.drawConnections(ctx2, landmarks2, POSE_CONNECTIONS, this.player2Colors.line);
+                const connections = this.poseDetector.constructor.POSE_CONNECTIONS || 
+                    (typeof POSE_CONNECTIONS !== 'undefined' ? POSE_CONNECTIONS : []);
+                this.poseDetector.drawConnections(ctx2, landmarks2, connections, this.player2Colors.line);
                 this.poseDetector.drawLandmarks(ctx2, landmarks2, this.player2Colors.dot);
                 ctx2.restore();
             }

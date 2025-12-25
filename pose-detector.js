@@ -154,6 +154,7 @@ class PoseDetector {
             }
 
             // Use MediaPipe's drawing utilities if available (same as drawPose), otherwise use custom drawing
+            // EXACT same code as drawPose method
             if (typeof drawConnectors !== 'undefined' && typeof drawLandmarks !== 'undefined') {
                 drawConnectors(ctx, landmarks, POSE_CONNECTIONS, {
                     color: '#00FF00',
@@ -164,9 +165,9 @@ class PoseDetector {
                     radius: 3
                 });
             } else {
-                // Use same custom drawing methods as drawPose
-                this.drawConnections(ctx, landmarks, POSE_CONNECTIONS, '#00FF00');
-                this.drawLandmarks(ctx, landmarks, '#FF0000');
+                // Use same custom drawing methods as drawPose (no color params, use defaults)
+                this.drawConnections(ctx, landmarks, POSE_CONNECTIONS);
+                this.drawLandmarks(ctx, landmarks);
             }
 
             ctx.restore();

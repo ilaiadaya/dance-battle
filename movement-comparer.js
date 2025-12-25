@@ -156,7 +156,7 @@ class MovementComparer {
     hasFullBody(landmarks) {
         if (!landmarks || landmarks.length < 33) return false;
 
-        // Check for critical body parts - require more strict detection
+        // Check for critical body parts - require ALL critical points for true full body
         const criticalPoints = [
             11, 12, // both shoulders (REQUIRED)
             23, 24, // both hips (REQUIRED)
@@ -169,7 +169,7 @@ class MovementComparer {
             27, 28  // ankles
         ];
 
-        // Must have both shoulders and both hips (critical for full body)
+        // Must have ALL 4 critical points (both shoulders AND both hips)
         let criticalDetected = 0;
         criticalPoints.forEach((index) => {
             const point = landmarks[index];
@@ -178,10 +178,10 @@ class MovementComparer {
             }
         });
         
-        // Must have at least 3 out of 4 critical points (both shoulders + at least one hip, or both hips + at least one shoulder)
-        if (criticalDetected < 3) return false;
+        // Require ALL 4 critical points (both shoulders AND both hips)
+        if (criticalDetected < 4) return false;
 
-        // Also need at least 4 out of 8 important points (limbs)
+        // Also need at least 6 out of 8 important points (limbs) for complete full body
         let importantDetected = 0;
         importantPoints.forEach((index) => {
             const point = landmarks[index];
@@ -190,8 +190,32 @@ class MovementComparer {
             }
         });
 
-        // Need at least 4 limb points for a complete full body
-        return importantDetected >= 4;
+        // Need at least 6 limb points for a complete full body (was 4, now stricter)
+        return importantDetected >= 6;
+    }
+
+    // Check if lighting/background quality is good enough for detection
+    hasGoodLighting(landmarks) {
+        if (!landmarks || landmarks.length < 33) return false;
+        
+        // Check average visibility of key body points
+        const keyPoints = [11, 12, 13, 14, 15, 16, 23, 24, 25, 26, 27, 28];
+        let totalVisibility = 0;
+        let validPoints = 0;
+        
+        keyPoints.forEach((index) => {
+            const point = landmarks[index];
+            if (point) {
+                totalVisibility += point.visibility;
+                validPoints++;
+            }
+        });
+        
+        if (validPoints === 0) return false;
+        
+        const averageVisibility = totalVisibility / validPoints;
+        // Require average visibility of at least 0.6 for good lighting/background
+        return averageVisibility >= 0.6;
     }
 }
 

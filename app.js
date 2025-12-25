@@ -301,13 +301,13 @@ class DanceBattleApp {
                 return;
             }
             
-            // Change layout to battle mode (reference big on top, user small below)
+            // Show countdown: 3, 2, 1
+            await this.showCountdown();
+            
+            // Change layout to battle mode (reference big on top, user small below) after countdown
             if (this.mainContent) {
                 this.mainContent.classList.add('battle-mode');
             }
-            
-            // Show countdown: 3, 2, 1
-            await this.showCountdown();
             
             this.statusEl.textContent = 'Dance battle started! Follow the moves!';
             this.isRunning = true;

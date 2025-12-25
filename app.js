@@ -31,7 +31,7 @@ class DanceBattleApp {
         this.referencePoseTimestamps = []; // Store timestamps for interpolation
         this.isAnalyzingReference = false;
         this.lastSimilarity = 0;
-        this.currentDanceName = 'danceone';
+        this.currentDanceName = 'dancetwo';
         this.cameraPermissionGranted = false;
         this.startTime = null;
         this.hasWon = false;

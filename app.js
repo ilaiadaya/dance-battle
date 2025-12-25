@@ -22,6 +22,7 @@ class DanceBattleApp {
         this.isRunning = false;
         this.camera = null;
         this.referencePoses = [];
+        this.referencePoseTimestamps = []; // Store timestamps for interpolation
         this.isAnalyzingReference = false;
         this.lastSimilarity = 0;
         this.currentDanceName = 'dancetwo';
@@ -74,6 +75,7 @@ class DanceBattleApp {
         const selectedDance = this.danceSelect.value;
         this.currentDanceName = selectedDance;
         this.referencePoses = []; // Clear cached poses when switching dances
+        this.referencePoseTimestamps = []; // Clear timestamps too
         
         // Update video source and wait for it to load
         this.referenceVideo.src = `public/${selectedDance}.mp4`;
@@ -190,6 +192,10 @@ class DanceBattleApp {
                 const savedPoses = await this.loadPosesFromDatabase(this.currentDanceName);
                 if (savedPoses && savedPoses.length > 0) {
                     this.referencePoses = savedPoses;
+                    // Regenerate timestamps for loaded poses (assuming 60fps analysis)
+                    const estimatedFps = 60;
+                    const frameInterval = 1 / estimatedFps;
+                    this.referencePoseTimestamps = savedPoses.map((_, index) => index * frameInterval);
                     this.movementComparer.setReferencePoses(this.referencePoses);
                     this.statusEl.textContent = `✅ Loaded ${this.referencePoses.length} poses from database - Ready!`;
                 } else {
@@ -292,11 +298,16 @@ class DanceBattleApp {
 
             const startAnalysis = async () => {
                 video.currentTime = 0;
-                const fps = 30; // Target frame rate for analysis
+                // Increased frame rate for smoother analysis - analyze at 60fps for better continuity
+                const fps = 60; // Higher frame rate for smoother playback
                 const frameInterval = 1 / fps;
                 const maxDuration = video.duration;
                 let frameCount = 0;
                 const totalFrames = Math.ceil(maxDuration * fps);
+                
+                // Store poses with timestamps for accurate matching
+                this.referencePoses = [];
+                this.referencePoseTimestamps = []; // Store timestamps for each pose
                 
                 // Create a hidden canvas for analysis (faster, no drawing)
                 const analysisCanvas = document.createElement('canvas');
@@ -311,9 +322,14 @@ class DanceBattleApp {
                         // Done analyzing
                         this.isAnalyzingReference = false;
                         this.movementComparer.setReferencePoses(this.referencePoses);
-                        // Save the analyzed poses
-                        this.savePoses(this.referencePoses);
-                        this.statusEl.textContent = `Analyzed ${this.referencePoses.length} frames - Ready!`;
+                        // Save the analyzed poses to database
+                        try {
+                            await this.savePosesToDatabase(this.currentDanceName, this.referencePoses);
+                            this.statusEl.textContent = `✅ Analyzed and saved ${this.referencePoses.length} frames to database!`;
+                        } catch (error) {
+                            console.error('Error saving poses:', error);
+                            this.statusEl.textContent = `Analyzed ${this.referencePoses.length} frames (save failed, but ready to use)`;
+                        }
                         resolve();
                         return;
                     }
@@ -322,12 +338,25 @@ class DanceBattleApp {
                     try {
                         analysisCtx.drawImage(video, 0, 0, analysisCanvas.width, analysisCanvas.height);
                         
-                        // Detect pose in current frame (without drawing)
-                        const results = await this.poseDetector.detectPoseOnly(analysisCanvas);
-                        const landmarks = this.poseDetector.getPoseLandmarks(results);
+                        // Check if this is a multi-person dance (wakwaka)
+                        const isMultiPerson = this.currentDanceName === 'wakwaka';
                         
-                        if (landmarks) {
-                            this.referencePoses.push(landmarks);
+                        if (isMultiPerson) {
+                            // Detect multiple poses
+                            const multiplePoses = await this.poseDetector.detectMultiplePoses(analysisCanvas);
+                            if (multiplePoses && multiplePoses.length > 0) {
+                                this.referencePoses.push(multiplePoses);
+                                this.referencePoseTimestamps.push(currentTime);
+                            }
+                        } else {
+                            // Single person detection
+                            const results = await this.poseDetector.detectPoseOnly(analysisCanvas);
+                            const landmarks = this.poseDetector.getPoseLandmarks(results);
+                            
+                            if (landmarks) {
+                                this.referencePoses.push(landmarks);
+                                this.referencePoseTimestamps.push(currentTime);
+                            }
                         }
 
                         frameCount++;
@@ -354,7 +383,7 @@ class DanceBattleApp {
                         });
                         
                         // Small delay to ensure frame is ready
-                        await new Promise(resolve => setTimeout(resolve, 20));
+                        await new Promise(resolve => setTimeout(resolve, 10)); // Reduced delay for faster analysis
                         
                         // Continue to next frame
                         analyzeNextFrame();
@@ -383,21 +412,124 @@ class DanceBattleApp {
         });
     }
 
+    // Interpolate between two poses for smooth transitions
+    interpolatePoses(pose1, pose2, t) {
+        if (!pose1 || !pose2) return pose1 || pose2;
+        if (t <= 0) return pose1;
+        if (t >= 1) return pose2;
+        
+        // Check if multi-person (array of arrays)
+        const isMultiPerson1 = Array.isArray(pose1) && pose1.length > 0 && Array.isArray(pose1[0]);
+        const isMultiPerson2 = Array.isArray(pose2) && pose2.length > 0 && Array.isArray(pose2[0]);
+        
+        if (isMultiPerson1 || isMultiPerson2) {
+            // For multi-person, interpolate each person separately
+            const maxPersons = Math.max(
+                isMultiPerson1 ? pose1.length : 0,
+                isMultiPerson2 ? pose2.length : 0
+            );
+            const interpolated = [];
+            for (let i = 0; i < maxPersons; i++) {
+                const p1 = isMultiPerson1 && pose1[i] ? pose1[i] : null;
+                const p2 = isMultiPerson2 && pose2[i] ? pose2[i] : null;
+                if (p1 && p2) {
+                    interpolated.push(this.interpolateLandmarks(p1, p2, t));
+                } else if (p1) {
+                    interpolated.push(p1);
+                } else if (p2) {
+                    interpolated.push(p2);
+                }
+            }
+            return interpolated.length > 0 ? interpolated : null;
+        } else {
+            // Single person interpolation
+            return this.interpolateLandmarks(pose1, pose2, t);
+        }
+    }
+
+    // Interpolate between two landmark arrays
+    interpolateLandmarks(landmarks1, landmarks2, t) {
+        if (!landmarks1 || !landmarks2) return landmarks1 || landmarks2;
+        if (landmarks1.length !== landmarks2.length) return landmarks1;
+        
+        return landmarks1.map((lm1, i) => {
+            const lm2 = landmarks2[i];
+            if (!lm1 || !lm2) return lm1 || lm2;
+            
+            return {
+                x: lm1.x + (lm2.x - lm1.x) * t,
+                y: lm1.y + (lm2.y - lm1.y) * t,
+                z: lm1.z + (lm2.z - lm1.z) * t,
+                visibility: Math.max(lm1.visibility, lm2.visibility) // Use max visibility
+            };
+        });
+    }
+
     startReferenceOverlayLoop() {
         if (!this.isRunning) return;
 
-        // Draw pre-analyzed poses over the reference video
+        // Draw pre-analyzed poses over the reference video with interpolation
         const videoTime = this.referenceVideo.currentTime;
         const videoDuration = this.referenceVideo.duration;
         
         if (this.referencePoses.length > 0 && videoDuration > 0) {
-            const frameIndex = Math.floor(
-                (videoTime / videoDuration) * this.referencePoses.length
-            ) % this.referencePoses.length;
+            let referenceLandmarks = null;
             
-            const referenceLandmarks = this.referencePoses[frameIndex];
+            // Use timestamps if available for more accurate matching
+            if (this.referencePoseTimestamps.length === this.referencePoses.length && this.referencePoseTimestamps.length > 0) {
+                // Find the two closest frames for interpolation
+                let frameIndex1 = 0;
+                let frameIndex2 = 0;
+                
+                // Find the frame just before current time
+                for (let i = 0; i < this.referencePoseTimestamps.length; i++) {
+                    if (this.referencePoseTimestamps[i] <= videoTime) {
+                        frameIndex1 = i;
+                    } else {
+                        break;
+                    }
+                }
+                
+                // Next frame for interpolation
+                frameIndex2 = Math.min(frameIndex1 + 1, this.referencePoses.length - 1);
+                
+                const time1 = this.referencePoseTimestamps[frameIndex1];
+                const time2 = this.referencePoseTimestamps[frameIndex2];
+                
+                if (frameIndex1 === frameIndex2 || time1 === time2) {
+                    // Use single frame if at boundaries or same frame
+                    referenceLandmarks = this.referencePoses[frameIndex1];
+                } else {
+                    // Interpolate between frames
+                    const t = (videoTime - time1) / (time2 - time1);
+                    referenceLandmarks = this.interpolatePoses(
+                        this.referencePoses[frameIndex1],
+                        this.referencePoses[frameIndex2],
+                        t
+                    );
+                }
+            } else {
+                // Fallback to simple frame matching if no timestamps
+                const frameIndex = Math.floor(
+                    (videoTime / videoDuration) * this.referencePoses.length
+                ) % this.referencePoses.length;
+                referenceLandmarks = this.referencePoses[frameIndex];
+            }
+            
             if (referenceLandmarks) {
-                this.poseDetector.drawStoredLandmarks(referenceLandmarks, this.referenceCanvas);
+                // Check if multi-person (array of arrays) or single person
+                const isMultiPerson = Array.isArray(referenceLandmarks) && 
+                                      referenceLandmarks.length > 0 && 
+                                      Array.isArray(referenceLandmarks[0]);
+                
+                if (isMultiPerson) {
+                    // Multi-person: use different colors for each person
+                    const colors = ['#00FF00', '#00FFFF', '#FF00FF', '#FFFF00'];
+                    this.poseDetector.drawMultiplePoses(referenceLandmarks, this.referenceCanvas, colors);
+                } else {
+                    // Single person
+                    this.poseDetector.drawStoredLandmarks(referenceLandmarks, this.referenceCanvas);
+                }
             }
         }
 
@@ -408,58 +540,188 @@ class DanceBattleApp {
         if (!this.isRunning) return;
 
         try {
-            // Detect pose in camera
-            const cameraResults = await this.poseDetector.detectPose(
-                this.cameraVideo, 
-                this.cameraCanvas
-            );
-            const userLandmarks = this.poseDetector.getPoseLandmarks(cameraResults);
+            const isMultiPerson = this.currentDanceName === 'wakwaka';
+            
+            // Detect pose(s) in camera
+            let userPoses = [];
+            if (isMultiPerson) {
+                // Multi-person: detect multiple poses
+                userPoses = await this.poseDetector.detectMultiplePoses(this.cameraVideo);
+                // Draw multiple poses on camera canvas
+                if (userPoses.length > 0) {
+                    const colors = ['#00FF00', '#00FFFF', '#FF00FF', '#FFFF00'];
+                    this.poseDetector.drawMultiplePoses(userPoses, this.cameraCanvas, colors);
+                } else {
+                    // Clear canvas if no poses detected
+                    const ctx = this.cameraCanvas.getContext('2d');
+                    ctx.clearRect(0, 0, this.cameraCanvas.width, this.cameraCanvas.height);
+                }
+            } else {
+                // Single person: detect single pose
+                const cameraResults = await this.poseDetector.detectPose(
+                    this.cameraVideo, 
+                    this.cameraCanvas
+                );
+                const userLandmarks = this.poseDetector.getPoseLandmarks(cameraResults);
+                if (userLandmarks) {
+                    userPoses = [userLandmarks];
+                }
+            }
 
             // Sync reference pose with video playback time
             const videoTime = this.referenceVideo.currentTime;
             const videoDuration = this.referenceVideo.duration;
             
-            if (this.referencePoses.length > 0 && videoDuration > 0) {
-                const frameIndex = Math.floor(
-                    (videoTime / videoDuration) * this.referencePoses.length
-                ) % this.referencePoses.length;
+            if (this.referencePoses.length > 0 && videoDuration > 0 && userPoses.length > 0) {
+                // Use same interpolation logic as overlay for consistency
+                let referenceFramePoses = null;
                 
-                const referenceLandmarks = this.referencePoses[frameIndex];
-
-                // Compare and score
-                if (userLandmarks && referenceLandmarks) {
-                    // Get previous frame for movement detection
-                    const videoTime = this.referenceVideo.currentTime;
-                    const videoDuration = this.referenceVideo.duration;
-                    const currentFrameIndex = Math.floor(
+                if (this.referencePoseTimestamps.length === this.referencePoses.length && this.referencePoseTimestamps.length > 0) {
+                    // Find the two closest frames for interpolation
+                    let frameIndex1 = 0;
+                    
+                    for (let i = 0; i < this.referencePoseTimestamps.length; i++) {
+                        if (this.referencePoseTimestamps[i] <= videoTime) {
+                            frameIndex1 = i;
+                        } else {
+                            break;
+                        }
+                    }
+                    
+                    const frameIndex2 = Math.min(frameIndex1 + 1, this.referencePoses.length - 1);
+                    const time1 = this.referencePoseTimestamps[frameIndex1];
+                    const time2 = this.referencePoseTimestamps[frameIndex2];
+                    
+                    if (frameIndex1 === frameIndex2 || time1 === time2) {
+                        referenceFramePoses = this.referencePoses[frameIndex1];
+                    } else {
+                        // Use the frame closest to current time (no interpolation for comparison to keep it accurate)
+                        const t = (videoTime - time1) / (time2 - time1);
+                        referenceFramePoses = t < 0.5 ? this.referencePoses[frameIndex1] : this.referencePoses[frameIndex2];
+                    }
+                } else {
+                    // Fallback to simple frame matching
+                    const frameIndex = Math.floor(
                         (videoTime / videoDuration) * this.referencePoses.length
                     ) % this.referencePoses.length;
-                    const prevFrameIndex = currentFrameIndex > 0 ? currentFrameIndex - 1 : this.referencePoses.length - 1;
-                    const previousLandmarks = this.referencePoses[prevFrameIndex];
+                    referenceFramePoses = this.referencePoses[frameIndex];
+                }
+                
+                // Check if multi-person reference
+                const isRefMultiPerson = Array.isArray(referenceFramePoses) && 
+                                        referenceFramePoses.length > 0 && 
+                                        Array.isArray(referenceFramePoses[0]);
+                
+                if (isRefMultiPerson) {
+                    // Multi-person comparison: match each user to closest reference person
+                    let totalPoints = 0;
+                    let bestSimilarity = 0;
                     
-                    // Only award points if there's significant movement in the reference video
-                    const hasMovement = this.movementComparer.hasSignificantMovement(
-                        previousLandmarks, 
-                        referenceLandmarks
+                    // Get previous frame for movement detection
+                    let previousRefPoses = null;
+                    if (this.referencePoseTimestamps.length > 0) {
+                        // Find previous frame using timestamps
+                        let prevFrameIndex = 0;
+                        for (let i = 0; i < this.referencePoseTimestamps.length; i++) {
+                            if (this.referencePoseTimestamps[i] < videoTime) {
+                                prevFrameIndex = i;
+                            } else {
+                                break;
+                            }
+                        }
+                        previousRefPoses = this.referencePoses[prevFrameIndex] || this.referencePoses[0];
+                    } else {
+                        // Fallback
+                        const frameIndex = Math.floor((videoTime / videoDuration) * this.referencePoses.length) % this.referencePoses.length;
+                        const prevFrameIndex = frameIndex > 0 ? frameIndex - 1 : this.referencePoses.length - 1;
+                        previousRefPoses = this.referencePoses[prevFrameIndex];
+                    }
+                    
+                    // Check if any reference person is moving
+                    const hasMovement = this.movementComparer.hasSignificantMovementMultiPerson(
+                        previousRefPoses,
+                        referenceFramePoses
                     );
                     
                     if (hasMovement) {
-                        const similarity = this.movementComparer.comparePoses(
-                            userLandmarks, 
-                            referenceLandmarks
-                        );
-
-                        // Show visual feedback for good matches
-                        this.showMatchFeedback(similarity);
-
-                        // Award points based on similarity
-                        // Similarity is 0-1, so we multiply by a base point value
-                        const points = Math.floor(similarity * 10);
-                        if (points > 0) {
-                            this.scoreManager.addPoints(points);
+                        // Match each user pose to the closest reference pose
+                        userPoses.forEach(userPose => {
+                            let bestMatch = 0;
+                            let bestRefPose = null;
+                            
+                            // Find closest reference person
+                            referenceFramePoses.forEach(refPose => {
+                                const similarity = this.movementComparer.comparePoses(userPose, refPose);
+                                if (similarity > bestMatch) {
+                                    bestMatch = similarity;
+                                    bestRefPose = refPose;
+                                }
+                            });
+                            
+                            if (bestMatch > 0) {
+                                const points = Math.floor(bestMatch * 10);
+                                totalPoints += points;
+                                if (bestMatch > bestSimilarity) {
+                                    bestSimilarity = bestMatch;
+                                }
+                            }
+                        });
+                        
+                        if (totalPoints > 0) {
+                            this.scoreManager.addPoints(totalPoints);
+                            this.showMatchFeedback(bestSimilarity);
+                            this.lastSimilarity = bestSimilarity;
+                        }
+                    }
+                } else {
+                    // Single person comparison (original logic)
+                    const referenceLandmarks = referenceFramePoses;
+                    const userLandmarks = userPoses[0];
+                    
+                    if (userLandmarks && referenceLandmarks) {
+                        // Get previous frame for movement detection
+                        let previousLandmarks = null;
+                        if (this.referencePoseTimestamps.length > 0) {
+                            // Find previous frame using timestamps
+                            let prevFrameIndex = 0;
+                            for (let i = 0; i < this.referencePoseTimestamps.length; i++) {
+                                if (this.referencePoseTimestamps[i] < videoTime) {
+                                    prevFrameIndex = i;
+                                } else {
+                                    break;
+                                }
+                            }
+                            previousLandmarks = this.referencePoses[prevFrameIndex] || this.referencePoses[0];
+                        } else {
+                            // Fallback
+                            const frameIndex = Math.floor((videoTime / videoDuration) * this.referencePoses.length) % this.referencePoses.length;
+                            const prevFrameIndex = frameIndex > 0 ? frameIndex - 1 : this.referencePoses.length - 1;
+                            previousLandmarks = this.referencePoses[prevFrameIndex];
                         }
                         
-                        this.lastSimilarity = similarity;
+                        // Only award points if there's significant movement in the reference video
+                        const hasMovement = this.movementComparer.hasSignificantMovement(
+                            previousLandmarks, 
+                            referenceLandmarks
+                        );
+                        
+                        if (hasMovement) {
+                            const similarity = this.movementComparer.comparePoses(
+                                userLandmarks, 
+                                referenceLandmarks
+                            );
+
+                            // Show visual feedback for good matches
+                            this.showMatchFeedback(similarity);
+
+                            // Award points based on similarity
+                            const points = Math.floor(similarity * 10);
+                            if (points > 0) {
+                                this.scoreManager.addPoints(points);
+                            }
+                            
+                            this.lastSimilarity = similarity;
+                        }
                     }
                 }
             }

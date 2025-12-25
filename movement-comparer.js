@@ -1,13 +1,20 @@
 class MovementComparer {
     constructor() {
-        this.referencePoses = [];
+        this.referencePoses = []; // Array of frames, each frame can have multiple poses (array of landmark arrays)
         this.currentFrameIndex = 0;
         this.movementThreshold = 0.02; // Minimum movement to consider active (2% of frame)
+        this.isMultiPerson = false; // Track if we're dealing with multi-person video
     }
 
     setReferencePoses(poses) {
         this.referencePoses = poses;
         this.currentFrameIndex = 0;
+        // Check if this is multi-person (first frame is array of arrays)
+        if (poses.length > 0 && Array.isArray(poses[0]) && poses[0].length > 0 && Array.isArray(poses[0][0])) {
+            this.isMultiPerson = true;
+        } else {
+            this.isMultiPerson = false;
+        }
     }
 
     comparePoses(userLandmarks, referenceLandmarks) {
@@ -78,6 +85,37 @@ class MovementComparer {
         const pose = this.referencePoses[this.currentFrameIndex];
         this.currentFrameIndex = (this.currentFrameIndex + 1) % this.referencePoses.length;
         return pose;
+    }
+
+    // Get all reference poses for current frame (for multi-person)
+    getCurrentReferencePoses() {
+        if (this.referencePoses.length === 0) {
+            return [];
+        }
+
+        const framePoses = this.referencePoses[this.currentFrameIndex];
+        this.currentFrameIndex = (this.currentFrameIndex + 1) % this.referencePoses.length;
+        
+        // If multi-person, return array of poses; otherwise wrap single pose in array
+        if (this.isMultiPerson && Array.isArray(framePoses)) {
+            return framePoses;
+        } else if (framePoses) {
+            return [framePoses];
+        }
+        return [];
+    }
+
+    // Check if any reference person has significant movement
+    hasSignificantMovementMultiPerson(poseArray1, poseArray2) {
+        if (!poseArray1 || !poseArray2) return false;
+        
+        // Check each person in the frame
+        for (let i = 0; i < Math.min(poseArray1.length, poseArray2.length); i++) {
+            if (this.hasSignificantMovement(poseArray1[i], poseArray2[i])) {
+                return true; // At least one person is moving
+            }
+        }
+        return false;
     }
 
     reset() {

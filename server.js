@@ -13,20 +13,13 @@ app.use(cors());
 app.use(bodyParser.json({ limit: '100mb' })); // Large limit for pose data
 
 // Route handlers must come BEFORE static file serving
-// Serve landing page for root route
+// Serve battle app as landing page
 app.get('/', (req, res) => {
-    res.sendFile(path.join(__dirname, 'landing.html'));
-});
-
-// Serve battle app
-app.get('/battle.html', (req, res) => {
     res.sendFile(path.join(__dirname, 'index.html'));
 });
 
-// Serve static files from root (but exclude index.html from auto-serving)
-app.use(express.static('.', {
-    index: false // Don't auto-serve index.html
-}));
+// Serve static files from root
+app.use(express.static('.'));
 app.use('/public', express.static('public')); // Also serve from public directory
 
 // Initialize PostgreSQL connection
@@ -210,7 +203,7 @@ app.get('/battle.html', (req, res) => {
 app.listen(PORT, '0.0.0.0', () => {
     console.log(`🚀 Server running on port ${PORT}`);
     if (process.env.NODE_ENV !== 'production') {
-        console.log(`📱 Access the app at http://localhost:${PORT}/index.html`);
+        console.log(`🎮 Access the app at http://localhost:${PORT}/`);
     }
 });
 

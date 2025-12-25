@@ -18,6 +18,12 @@ class DanceBattleApp {
         this.matchOverlay = document.getElementById('matchOverlay');
         this.danceSelect = document.getElementById('danceSelect');
         this.videoProgressBar = document.getElementById('videoProgressBar');
+        this.countdownOverlay = document.getElementById('countdownOverlay');
+        this.countdownNumber = document.getElementById('countdownNumber');
+        this.scorePopup = document.getElementById('scorePopup');
+        this.scorePopupValue = document.getElementById('scorePopupValue');
+        this.confettiContainer = document.getElementById('confettiContainer');
+        this.mainContent = document.querySelector('.main-content');
         
         this.isRunning = false;
         this.camera = null;
@@ -25,10 +31,11 @@ class DanceBattleApp {
         this.referencePoseTimestamps = []; // Store timestamps for interpolation
         this.isAnalyzingReference = false;
         this.lastSimilarity = 0;
-        this.currentDanceName = 'dancetwo';
+        this.currentDanceName = 'danceone';
         this.cameraPermissionGranted = false;
         this.startTime = null;
         this.hasWon = false;
+        this.consecutiveGoodMatches = 0; // Track consecutive good matches for confetti
         
         // API base URL - use relative URL in production, absolute in development
         this.API_BASE = window.location.hostname === 'localhost' 
@@ -287,12 +294,20 @@ class DanceBattleApp {
             this.statusEl.textContent = 'Detecting full body in video...';
             try {
                 await this.waitForFullBodyDetection();
-                this.statusEl.textContent = 'Full body detected! Starting battle...';
+                this.statusEl.textContent = 'Full body detected!';
             } catch (error) {
                 this.statusEl.textContent = error.message;
                 this.startBtn.disabled = false;
                 return;
             }
+            
+            // Change layout to battle mode (reference big on top, user small below)
+            if (this.mainContent) {
+                this.mainContent.classList.add('battle-mode');
+            }
+            
+            // Show countdown: 3, 2, 1
+            await this.showCountdown();
             
             this.statusEl.textContent = 'Dance battle started! Follow the moves!';
             this.isRunning = true;
@@ -817,22 +832,93 @@ class DanceBattleApp {
         }
     }
 
+    async showCountdown() {
+        return new Promise((resolve) => {
+            this.countdownOverlay.classList.add('active');
+            let count = 3;
+            this.countdownNumber.textContent = count;
+            
+            const countdownInterval = setInterval(() => {
+                count--;
+                if (count > 0) {
+                    this.countdownNumber.textContent = count;
+                    // Add pulse animation
+                    this.countdownNumber.style.animation = 'none';
+                    setTimeout(() => {
+                        this.countdownNumber.style.animation = 'pulse 0.5s ease';
+                    }, 10);
+                } else {
+                    this.countdownNumber.textContent = 'GO!';
+                    setTimeout(() => {
+                        this.countdownOverlay.classList.remove('active');
+                        clearInterval(countdownInterval);
+                        resolve();
+                    }, 500);
+                }
+            }, 1000);
+        });
+    }
+
     showMatchFeedback(similarity) {
         // Show feedback for good matches (similarity > 0.7)
         if (similarity > 0.7) {
+            // Increment consecutive good matches
+            this.consecutiveGoodMatches++;
+            
+            // Show big pop-out green flash
+            this.matchOverlay.classList.add('active', 'big-pop');
+            setTimeout(() => {
+                this.matchOverlay.classList.remove('active', 'big-pop');
+            }, 600);
+            
+            // Show score popup
+            this.showScorePopup();
+            
             // Flash indicator for excellent matches (> 0.9)
             if (similarity > 0.9) {
-                this.matchIndicator.classList.add('active');
+                this.matchIndicator.classList.add('active', 'big-pop');
                 setTimeout(() => {
-                    this.matchIndicator.classList.remove('active');
-                }, 500);
+                    this.matchIndicator.classList.remove('active', 'big-pop');
+                }, 600);
             }
             
-            // Show overlay on camera section
-            this.matchOverlay.classList.add('active');
+            // Show confetti for 3+ consecutive good matches
+            if (this.consecutiveGoodMatches >= 3) {
+                this.showConfetti();
+            }
+        } else {
+            // Reset consecutive counter if match isn't good
+            this.consecutiveGoodMatches = 0;
+        }
+    }
+
+    showScorePopup() {
+        const currentScore = Math.floor(this.scoreManager.score);
+        this.scorePopupValue.textContent = currentScore;
+        this.scorePopup.classList.add('active');
+        
+        setTimeout(() => {
+            this.scorePopup.classList.remove('active');
+        }, 1000);
+    }
+
+    showConfetti() {
+        // Create confetti particles
+        const colors = ['#00ff00', '#00ffff', '#ff00ff', '#ffff00', '#ff6b6b', '#4ecdc4', '#45b7d1', '#f9ca24'];
+        const particleCount = 50;
+        
+        for (let i = 0; i < particleCount; i++) {
+            const confetti = document.createElement('div');
+            confetti.className = 'confetti-particle';
+            confetti.style.left = Math.random() * 100 + '%';
+            confetti.style.backgroundColor = colors[Math.floor(Math.random() * colors.length)];
+            confetti.style.animationDelay = Math.random() * 0.5 + 's';
+            confetti.style.transform = `rotate(${Math.random() * 360}deg)`;
+            this.confettiContainer.appendChild(confetti);
+            
             setTimeout(() => {
-                this.matchOverlay.classList.remove('active');
-            }, 300);
+                confetti.remove();
+            }, 3000);
         }
     }
 

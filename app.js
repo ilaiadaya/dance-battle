@@ -349,8 +349,8 @@ class DanceBattleApp {
                 return;
             }
             
-            // Wait for full body detection in reference video before starting
-            this.statusEl.textContent = 'Detecting full body in video...';
+            // Wait for full body detection in USER's camera before starting
+            this.statusEl.textContent = 'Detecting your full body in camera...';
             try {
                 await this.waitForFullBodyDetection();
                 this.statusEl.textContent = 'Full body detected!';

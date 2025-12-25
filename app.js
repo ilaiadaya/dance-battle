@@ -73,6 +73,16 @@ class DanceBattleApp {
 
     onDanceChange() {
         const selectedDance = this.danceSelect.value;
+        
+        // Handle "coming soon" option
+        if (selectedDance === 'coming-soon') {
+            this.statusEl.textContent = 'More dances coming soon! Stay tuned! 🎵';
+            // Reset to danceone
+            this.danceSelect.value = 'danceone';
+            this.currentDanceName = 'danceone';
+            return;
+        }
+        
         this.currentDanceName = selectedDance;
         this.referencePoses = []; // Clear cached poses when switching dances
         this.referencePoseTimestamps = []; // Clear timestamps too

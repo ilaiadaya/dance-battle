@@ -192,10 +192,23 @@ class DanceBattleApp {
                 const savedPoses = await this.loadPosesFromDatabase(this.currentDanceName);
                 if (savedPoses && savedPoses.length > 0) {
                     this.referencePoses = savedPoses;
-                    // Regenerate timestamps for loaded poses (assuming 60fps analysis)
-                    const estimatedFps = 60;
-                    const frameInterval = 1 / estimatedFps;
-                    this.referencePoseTimestamps = savedPoses.map((_, index) => index * frameInterval);
+                    // Regenerate timestamps based on actual video duration and frame count
+                    // This ensures proper synchronization regardless of original analysis FPS
+                    await new Promise((resolve) => {
+                        if (this.referenceVideo.readyState >= 2 && this.referenceVideo.duration) {
+                            const videoDuration = this.referenceVideo.duration;
+                            const frameInterval = videoDuration / savedPoses.length;
+                            this.referencePoseTimestamps = savedPoses.map((_, index) => index * frameInterval);
+                            resolve();
+                        } else {
+                            this.referenceVideo.addEventListener('loadedmetadata', () => {
+                                const videoDuration = this.referenceVideo.duration;
+                                const frameInterval = videoDuration / savedPoses.length;
+                                this.referencePoseTimestamps = savedPoses.map((_, index) => index * frameInterval);
+                                resolve();
+                            }, { once: true });
+                        }
+                    });
                     this.movementComparer.setReferencePoses(this.referencePoses);
                     this.statusEl.textContent = `✅ Loaded ${this.referencePoses.length} poses from database - Ready!`;
                 } else {
@@ -468,53 +481,18 @@ class DanceBattleApp {
     startReferenceOverlayLoop() {
         if (!this.isRunning) return;
 
-        // Draw pre-analyzed poses over the reference video with interpolation
+        // Use stored poses with simple, accurate frame calculation
         const videoTime = this.referenceVideo.currentTime;
         const videoDuration = this.referenceVideo.duration;
         
         if (this.referencePoses.length > 0 && videoDuration > 0) {
-            let referenceLandmarks = null;
+            // Calculate frame index - use floor to ensure we're at or before current time (never ahead)
+            const frameIndex = Math.min(
+                Math.floor((videoTime / videoDuration) * this.referencePoses.length),
+                this.referencePoses.length - 1
+            );
             
-            // Use timestamps if available for more accurate matching
-            if (this.referencePoseTimestamps.length === this.referencePoses.length && this.referencePoseTimestamps.length > 0) {
-                // Find the two closest frames for interpolation
-                let frameIndex1 = 0;
-                let frameIndex2 = 0;
-                
-                // Find the frame just before current time
-                for (let i = 0; i < this.referencePoseTimestamps.length; i++) {
-                    if (this.referencePoseTimestamps[i] <= videoTime) {
-                        frameIndex1 = i;
-                    } else {
-                        break;
-                    }
-                }
-                
-                // Next frame for interpolation
-                frameIndex2 = Math.min(frameIndex1 + 1, this.referencePoses.length - 1);
-                
-                const time1 = this.referencePoseTimestamps[frameIndex1];
-                const time2 = this.referencePoseTimestamps[frameIndex2];
-                
-                if (frameIndex1 === frameIndex2 || time1 === time2) {
-                    // Use single frame if at boundaries or same frame
-                    referenceLandmarks = this.referencePoses[frameIndex1];
-                } else {
-                    // Interpolate between frames
-                    const t = (videoTime - time1) / (time2 - time1);
-                    referenceLandmarks = this.interpolatePoses(
-                        this.referencePoses[frameIndex1],
-                        this.referencePoses[frameIndex2],
-                        t
-                    );
-                }
-            } else {
-                // Fallback to simple frame matching if no timestamps
-                const frameIndex = Math.floor(
-                    (videoTime / videoDuration) * this.referencePoses.length
-                ) % this.referencePoses.length;
-                referenceLandmarks = this.referencePoses[frameIndex];
-            }
+            const referenceLandmarks = this.referencePoses[frameIndex];
             
             if (referenceLandmarks) {
                 // Check if multi-person (array of arrays) or single person
@@ -568,44 +546,18 @@ class DanceBattleApp {
                 }
             }
 
-            // Sync reference pose with video playback time
+            // Use stored poses for comparison - calculate frame index from video time
             const videoTime = this.referenceVideo.currentTime;
             const videoDuration = this.referenceVideo.duration;
             
             if (this.referencePoses.length > 0 && videoDuration > 0 && userPoses.length > 0) {
-                // Use same interpolation logic as overlay for consistency
-                let referenceFramePoses = null;
+                // Calculate frame index - use simple floor to ensure we're never ahead
+                const frameIndex = Math.min(
+                    Math.floor((videoTime / videoDuration) * this.referencePoses.length),
+                    this.referencePoses.length - 1
+                );
                 
-                if (this.referencePoseTimestamps.length === this.referencePoses.length && this.referencePoseTimestamps.length > 0) {
-                    // Find the two closest frames for interpolation
-                    let frameIndex1 = 0;
-                    
-                    for (let i = 0; i < this.referencePoseTimestamps.length; i++) {
-                        if (this.referencePoseTimestamps[i] <= videoTime) {
-                            frameIndex1 = i;
-                        } else {
-                            break;
-                        }
-                    }
-                    
-                    const frameIndex2 = Math.min(frameIndex1 + 1, this.referencePoses.length - 1);
-                    const time1 = this.referencePoseTimestamps[frameIndex1];
-                    const time2 = this.referencePoseTimestamps[frameIndex2];
-                    
-                    if (frameIndex1 === frameIndex2 || time1 === time2) {
-                        referenceFramePoses = this.referencePoses[frameIndex1];
-                    } else {
-                        // Use the frame closest to current time (no interpolation for comparison to keep it accurate)
-                        const t = (videoTime - time1) / (time2 - time1);
-                        referenceFramePoses = t < 0.5 ? this.referencePoses[frameIndex1] : this.referencePoses[frameIndex2];
-                    }
-                } else {
-                    // Fallback to simple frame matching
-                    const frameIndex = Math.floor(
-                        (videoTime / videoDuration) * this.referencePoses.length
-                    ) % this.referencePoses.length;
-                    referenceFramePoses = this.referencePoses[frameIndex];
-                }
+                const referenceFramePoses = this.referencePoses[frameIndex];
                 
                 // Check if multi-person reference
                 const isRefMultiPerson = Array.isArray(referenceFramePoses) && 
@@ -618,24 +570,8 @@ class DanceBattleApp {
                     let bestSimilarity = 0;
                     
                     // Get previous frame for movement detection
-                    let previousRefPoses = null;
-                    if (this.referencePoseTimestamps.length > 0) {
-                        // Find previous frame using timestamps
-                        let prevFrameIndex = 0;
-                        for (let i = 0; i < this.referencePoseTimestamps.length; i++) {
-                            if (this.referencePoseTimestamps[i] < videoTime) {
-                                prevFrameIndex = i;
-                            } else {
-                                break;
-                            }
-                        }
-                        previousRefPoses = this.referencePoses[prevFrameIndex] || this.referencePoses[0];
-                    } else {
-                        // Fallback
-                        const frameIndex = Math.floor((videoTime / videoDuration) * this.referencePoses.length) % this.referencePoses.length;
-                        const prevFrameIndex = frameIndex > 0 ? frameIndex - 1 : this.referencePoses.length - 1;
-                        previousRefPoses = this.referencePoses[prevFrameIndex];
-                    }
+                    const prevFrameIndex = frameIndex > 0 ? frameIndex - 1 : 0;
+                    const previousRefPoses = this.referencePoses[prevFrameIndex];
                     
                     // Check if any reference person is moving
                     const hasMovement = this.movementComparer.hasSignificantMovementMultiPerson(
@@ -680,24 +616,8 @@ class DanceBattleApp {
                     
                     if (userLandmarks && referenceLandmarks) {
                         // Get previous frame for movement detection
-                        let previousLandmarks = null;
-                        if (this.referencePoseTimestamps.length > 0) {
-                            // Find previous frame using timestamps
-                            let prevFrameIndex = 0;
-                            for (let i = 0; i < this.referencePoseTimestamps.length; i++) {
-                                if (this.referencePoseTimestamps[i] < videoTime) {
-                                    prevFrameIndex = i;
-                                } else {
-                                    break;
-                                }
-                            }
-                            previousLandmarks = this.referencePoses[prevFrameIndex] || this.referencePoses[0];
-                        } else {
-                            // Fallback
-                            const frameIndex = Math.floor((videoTime / videoDuration) * this.referencePoses.length) % this.referencePoses.length;
-                            const prevFrameIndex = frameIndex > 0 ? frameIndex - 1 : this.referencePoses.length - 1;
-                            previousLandmarks = this.referencePoses[prevFrameIndex];
-                        }
+                        const prevFrameIndex = frameIndex > 0 ? frameIndex - 1 : 0;
+                        const previousLandmarks = this.referencePoses[prevFrameIndex];
                         
                         // Only award points if there's significant movement in the reference video
                         const hasMovement = this.movementComparer.hasSignificantMovement(

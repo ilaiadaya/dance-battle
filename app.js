@@ -741,10 +741,17 @@ class DanceBattleApp {
         // Reset score and state
         this.scoreManager.reset();
         this.referencePoses = [];
+        this.referencePoseTimestamps = [];
         this.movementComparer.setReferencePoses([]);
         this.lastSimilarity = 0;
+        this.consecutiveGoodMatches = 0;
         this.startTime = null;
         this.hasWon = false;
+        
+        // Reset layout
+        if (this.mainContent) {
+            this.mainContent.classList.remove('battle-mode');
+        }
         
         // Reset progress bar
         if (this.videoProgressBar) {

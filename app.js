@@ -84,9 +84,9 @@ class DanceBattleApp {
         // Handle "coming soon" option
         if (selectedDance === 'coming-soon') {
             this.statusEl.textContent = 'More dances coming soon! Stay tuned! 🎵';
-            // Reset to danceone
-            this.danceSelect.value = 'danceone';
-            this.currentDanceName = 'danceone';
+            // Reset to dancetwo
+            this.danceSelect.value = 'dancetwo';
+            this.currentDanceName = 'dancetwo';
             return;
         }
         

@@ -156,26 +156,42 @@ class MovementComparer {
     hasFullBody(landmarks) {
         if (!landmarks || landmarks.length < 33) return false;
 
-        // Check for key body parts
-        const requiredPoints = [
-            11, 12, // shoulders
-            23, 24, // hips
-            13, 14, // elbows (at least one)
-            15, 16, // wrists (at least one)
-            25, 26, // knees (at least one)
-            27, 28  // ankles (at least one)
+        // Check for critical body parts - require more strict detection
+        const criticalPoints = [
+            11, 12, // both shoulders (REQUIRED)
+            23, 24, // both hips (REQUIRED)
+        ];
+        
+        const importantPoints = [
+            13, 14, // elbows
+            15, 16, // wrists
+            25, 26, // knees
+            27, 28  // ankles
         ];
 
-        let detectedPoints = 0;
-        requiredPoints.forEach((index) => {
+        // Must have both shoulders and both hips (critical for full body)
+        let criticalDetected = 0;
+        criticalPoints.forEach((index) => {
             const point = landmarks[index];
             if (point && point.visibility > 0.5) {
-                detectedPoints++;
+                criticalDetected++;
+            }
+        });
+        
+        // Must have at least 3 out of 4 critical points (both shoulders + at least one hip, or both hips + at least one shoulder)
+        if (criticalDetected < 3) return false;
+
+        // Also need at least 4 out of 8 important points (limbs)
+        let importantDetected = 0;
+        importantPoints.forEach((index) => {
+            const point = landmarks[index];
+            if (point && point.visibility > 0.5) {
+                importantDetected++;
             }
         });
 
-        // Need at least 6 out of 10 key points for full body
-        return detectedPoints >= 6;
+        // Need at least 4 limb points for a complete full body
+        return importantDetected >= 4;
     }
 }
 

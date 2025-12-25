@@ -120,12 +120,12 @@ class DanceBattleApp {
         }
         
         const checkInterval = 200; // Check every 200ms
-        const maxChecks = 50; // Check up to 10 seconds
         const requiredConsecutiveDetections = 5; // Need 5 consecutive frames with full body (1 second)
         
         let consecutiveDetections = 0;
+        let timeoutId = null;
         
-        return new Promise((resolve, reject) => {
+        return new Promise((resolve) => {
             const checkFrame = async () => {
                 try {
                     const results = await this.poseDetector.detectPoseOnly(video);
@@ -137,6 +137,11 @@ class DanceBattleApp {
                         this.movementComparer.hasGoodLighting(landmarks)) {
                         consecutiveDetections++;
                         
+                        // Update status to show progress
+                        if (consecutiveDetections === 1) {
+                            this.statusEl.textContent = 'Detecting your full body in camera...';
+                        }
+                        
                         // If we have enough consecutive detections, we're good
                         if (consecutiveDetections >= requiredConsecutiveDetections) {
                             resolve(); // Full body detected, ready to start
@@ -145,27 +150,20 @@ class DanceBattleApp {
                     } else {
                         // Reset consecutive counter if no full body detected
                         consecutiveDetections = 0;
+                        this.statusEl.textContent = 'Please step back so your full body (head to feet) is visible in the camera with good lighting...';
                     }
                 } catch (error) {
                     console.error('Error detecting pose in camera:', error);
                     consecutiveDetections = 0;
+                    this.statusEl.textContent = 'Please step back so your full body (head to feet) is visible in the camera with good lighting...';
                 }
                 
-                // Continue checking
-                if (consecutiveDetections < requiredConsecutiveDetections) {
-                    setTimeout(checkFrame, checkInterval);
-                }
+                // Continue checking indefinitely until full body is detected
+                timeoutId = setTimeout(checkFrame, checkInterval);
             };
             
             // Start checking
             checkFrame();
-            
-            // Timeout after max checks
-            setTimeout(() => {
-                if (consecutiveDetections < requiredConsecutiveDetections) {
-                    reject(new Error('Could not detect your full body. Please step back so your full body (head to feet) is visible in the camera with good lighting.'));
-                }
-            }, maxChecks * checkInterval);
         });
     }
 

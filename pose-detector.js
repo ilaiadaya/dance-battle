@@ -132,6 +132,7 @@ class PoseDetector {
     }
 
     // Draw pre-stored landmarks without detection (supports single pose or array of poses)
+    // This matches the exact same style as drawPose used for camera feed
     drawStoredLandmarks(landmarks, canvasElement, colors = ['#00FF00', '#00FFFF', '#FF00FF', '#FFFF00']) {
         if (!landmarks) return;
 
@@ -140,20 +141,33 @@ class PoseDetector {
             // Multi-person: array of pose arrays
             this.drawMultiplePoses(landmarks, canvasElement, colors);
         } else if (Array.isArray(landmarks) && landmarks.length > 0 && landmarks[0].x !== undefined) {
-            // Single pose: array of landmarks
+            // Single pose: array of landmarks - use EXACT same style as drawPose
             const ctx = canvasElement.getContext('2d');
             ctx.save();
             ctx.clearRect(0, 0, canvasElement.width, canvasElement.height);
             
-            // Set canvas size to match video
+            // Set canvas size to match video (same as drawPose)
             if (canvasElement.width !== canvasElement.offsetWidth || 
                 canvasElement.height !== canvasElement.offsetHeight) {
                 canvasElement.width = canvasElement.offsetWidth;
                 canvasElement.height = canvasElement.offsetHeight;
             }
 
-            this.drawConnections(ctx, landmarks, POSE_CONNECTIONS);
-            this.drawLandmarks(ctx, landmarks);
+            // Use MediaPipe's drawing utilities if available (same as drawPose), otherwise use custom drawing
+            if (typeof drawConnectors !== 'undefined' && typeof drawLandmarks !== 'undefined') {
+                drawConnectors(ctx, landmarks, POSE_CONNECTIONS, {
+                    color: '#00FF00',
+                    lineWidth: 2
+                });
+                drawLandmarks(ctx, landmarks, {
+                    color: '#FF0000',
+                    radius: 3
+                });
+            } else {
+                // Use same custom drawing methods as drawPose
+                this.drawConnections(ctx, landmarks, POSE_CONNECTIONS, '#00FF00');
+                this.drawLandmarks(ctx, landmarks, '#FF0000');
+            }
 
             ctx.restore();
         }

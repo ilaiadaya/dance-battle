@@ -64,32 +64,17 @@ h1 {
     transition: all 0.6s ease-in-out;
 }
 
-/* Battle mode: switch to vertical layout with reference on top, user below */
+/* Battle mode: keep side-by-side but adjust sizes */
 .main-content.battle-mode {
-    grid-template-columns: 1fr;
-    flex-direction: column;
+    grid-template-columns: 1.3fr 0.7fr; /* Reference bigger (1.3x), user smaller (0.7x) */
 }
 
 .video-section {
     transition: all 0.6s ease-in-out;
-    order: 1; /* Reference video on top */
 }
 
 .camera-section {
     transition: all 0.6s ease-in-out;
-    order: 2; /* User video below */
-}
-
-/* In battle mode, make reference video bigger (but not full screen) */
-.main-content.battle-mode .video-section {
-    max-width: 85%;
-    margin: 0 auto;
-}
-
-/* In battle mode, make camera section smaller and centered */
-.main-content.battle-mode .camera-section {
-    max-width: 70%;
-    margin: 0 auto;
 }
 
 .video-section .video-wrapper {
@@ -100,15 +85,6 @@ h1 {
 .camera-section .video-wrapper {
     aspect-ratio: 16 / 9;
     transition: all 0.6s ease-in-out;
-}
-
-/* In battle mode, keep same aspect ratios */
-.main-content.battle-mode .video-section .video-wrapper {
-    aspect-ratio: 16 / 9;
-}
-
-.main-content.battle-mode .camera-section .video-wrapper {
-    aspect-ratio: 16 / 9;
 }
 
 .video-section, .camera-section {

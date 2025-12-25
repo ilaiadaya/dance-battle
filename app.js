@@ -107,97 +107,66 @@ class DanceBattleApp {
     }
 
     async waitForFullBodyDetection() {
-        // Thoroughly check multiple frames to ensure we have a stable full body detection
-        const video = this.referenceVideo;
+        // Check the USER's camera feed for full body detection (not reference video)
+        const video = this.cameraVideo;
         
-        // Make sure video is paused during detection
-        video.pause();
-        
-        const checkInterval = 0.2; // Check every 0.2 seconds for more thorough scanning
-        const maxChecks = 30; // Check up to 6 seconds of video
-        const requiredConsecutiveDetections = 3; // Need 3 consecutive frames with full body
-        
-        let consecutiveDetections = 0;
-        let lastDetectionTime = null;
-        
-        for (let i = 0; i < maxChecks; i++) {
-            const checkTime = i * checkInterval;
-            video.currentTime = checkTime;
-            
-            // Wait for video to seek (but keep it paused)
-            await new Promise((resolve) => {
-                const onSeeked = () => {
-                    video.removeEventListener('seeked', onSeeked);
-                    // Ensure video stays paused
-                    video.pause();
-                    setTimeout(resolve, 150); // Give it time to render
-                };
-                video.addEventListener('seeked', onSeeked, { once: true });
-                
-                // Timeout fallback
-                setTimeout(() => {
-                    video.removeEventListener('seeked', onSeeked);
-                    video.pause(); // Ensure paused
-                    resolve();
-                }, 500);
-            });
-            
-            // Detect pose in current frame
-            try {
-                const results = await this.poseDetector.detectPoseOnly(video);
-                const landmarks = this.poseDetector.getPoseLandmarks(results);
-                
-                // Check for full body AND good lighting/background quality
-                if (landmarks && 
-                    this.movementComparer.hasFullBody(landmarks) &&
-                    this.movementComparer.hasGoodLighting(landmarks)) {
-                    // Check if this is consecutive with previous detection
-                    if (lastDetectionTime !== null && checkTime - lastDetectionTime <= checkInterval * 1.5) {
-                        consecutiveDetections++;
-                    } else {
-                        consecutiveDetections = 1; // Reset if not consecutive
-                    }
-                    lastDetectionTime = checkTime;
-                    
-                    // If we have enough consecutive detections, we're good
-                    if (consecutiveDetections >= requiredConsecutiveDetections) {
-                        // Found stable full body detection, reset video to start
-                        video.currentTime = 0;
-                        video.pause(); // Keep paused
-                        await new Promise((resolve) => {
-                            const onSeeked = () => {
-                                video.removeEventListener('seeked', onSeeked);
-                                video.pause(); // Ensure still paused
-                                resolve();
-                            };
-                            video.addEventListener('seeked', onSeeked, { once: true });
-                        });
-                        return; // Full body detected, ready to start
-                    }
-                } else {
-                    // Reset consecutive counter if no full body detected
-                    consecutiveDetections = 0;
-                    lastDetectionTime = null;
-                }
-            } catch (error) {
-                console.error('Error detecting pose in frame:', error);
-                consecutiveDetections = 0;
-            }
+        if (!video || !video.srcObject) {
+            throw new Error('Camera not available. Please grant camera access.');
         }
         
-        // If we didn't find stable full body detection, show error and don't start
-        video.currentTime = 0;
-        video.pause(); // Keep paused
-        await new Promise((resolve) => {
-            const onSeeked = () => {
-                video.removeEventListener('seeked', onSeeked);
-                video.pause(); // Ensure paused
-                resolve();
-            };
-            video.addEventListener('seeked', onSeeked, { once: true });
-        });
+        // Make sure video is playing to get live feed
+        if (video.paused) {
+            video.play();
+        }
         
-        throw new Error('Could not detect a stable full body in the reference video. Please ensure the dancer is clearly visible with full body in frame and good lighting.');
+        const checkInterval = 200; // Check every 200ms
+        const maxChecks = 50; // Check up to 10 seconds
+        const requiredConsecutiveDetections = 5; // Need 5 consecutive frames with full body (1 second)
+        
+        let consecutiveDetections = 0;
+        
+        return new Promise((resolve, reject) => {
+            const checkFrame = async () => {
+                try {
+                    const results = await this.poseDetector.detectPoseOnly(video);
+                    const landmarks = this.poseDetector.getPoseLandmarks(results);
+                    
+                    // Check for full body AND good lighting/background quality
+                    if (landmarks && 
+                        this.movementComparer.hasFullBody(landmarks) &&
+                        this.movementComparer.hasGoodLighting(landmarks)) {
+                        consecutiveDetections++;
+                        
+                        // If we have enough consecutive detections, we're good
+                        if (consecutiveDetections >= requiredConsecutiveDetections) {
+                            resolve(); // Full body detected, ready to start
+                            return;
+                        }
+                    } else {
+                        // Reset consecutive counter if no full body detected
+                        consecutiveDetections = 0;
+                    }
+                } catch (error) {
+                    console.error('Error detecting pose in camera:', error);
+                    consecutiveDetections = 0;
+                }
+                
+                // Continue checking
+                if (consecutiveDetections < requiredConsecutiveDetections) {
+                    setTimeout(checkFrame, checkInterval);
+                }
+            };
+            
+            // Start checking
+            checkFrame();
+            
+            // Timeout after max checks
+            setTimeout(() => {
+                if (consecutiveDetections < requiredConsecutiveDetections) {
+                    reject(new Error('Could not detect your full body. Please step back so your full body (head to feet) is visible in the camera with good lighting.'));
+                }
+            }, maxChecks * checkInterval);
+        });
     }
 
     setupVideoListeners() {

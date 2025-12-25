@@ -214,8 +214,8 @@ class MovementComparer {
         if (validPoints === 0) return false;
         
         const averageVisibility = totalVisibility / validPoints;
-        // Require average visibility of at least 0.6 for good lighting/background
-        return averageVisibility >= 0.6;
+        // Require average visibility of at least 0.5 for good lighting/background (less strict)
+        return averageVisibility >= 0.5;
     }
 }
 

@@ -310,15 +310,50 @@ class DanceBattleApp {
                 }
             }
 
-            // Wait for video to be ready before playing
-            await new Promise((resolve) => {
-                if (this.referenceVideo.readyState >= 2) {
-                    resolve();
-                } else {
-                    this.referenceVideo.addEventListener('loadeddata', resolve, { once: true });
+            // Wait for video to be ready before playing (with timeout and error handling)
+            try {
+                await new Promise((resolve, reject) => {
+                    if (this.referenceVideo.readyState >= 2) {
+                        resolve();
+                        return;
+                    }
+                    
+                    let resolved = false;
+                    const errorHandler = () => {
+                        if (!resolved) {
+                            resolved = true;
+                            reject(new Error(`Failed to load video: ${this.referenceVideo.src}. Please check if the file exists.`));
+                        }
+                    };
+                    
+                    const successHandler = () => {
+                        if (!resolved) {
+                            resolved = true;
+                            this.referenceVideo.removeEventListener('error', errorHandler);
+                            resolve();
+                        }
+                    };
+                    
+                    this.referenceVideo.addEventListener('error', errorHandler, { once: true });
+                    this.referenceVideo.addEventListener('loadeddata', successHandler, { once: true });
+                    
+                    // Timeout after 10 seconds
+                    setTimeout(() => {
+                        if (!resolved && this.referenceVideo.readyState < 2) {
+                            resolved = true;
+                            this.referenceVideo.removeEventListener('error', errorHandler);
+                            this.referenceVideo.removeEventListener('loadeddata', successHandler);
+                            reject(new Error('Video loading timeout. Please check your internet connection and video file.'));
+                        }
+                    }, 10000);
+                    
                     this.referenceVideo.load(); // Force load if not already loading
-                }
-            });
+                });
+            } catch (error) {
+                this.statusEl.textContent = error.message;
+                this.startBtn.disabled = false;
+                return;
+            }
             
             // Wait for full body detection in reference video before starting
             this.statusEl.textContent = 'Detecting full body in video...';

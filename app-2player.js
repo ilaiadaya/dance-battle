@@ -3,19 +3,24 @@ class DanceBattleApp2Player {
         this.poseDetector = new PoseDetector();
         this.movementComparer = new MovementComparer();
         
-        // Player 1 elements
+        // Reference video elements
         this.referenceVideo1 = document.getElementById('referenceVideo1');
-        this.cameraVideo1 = document.getElementById('cameraVideo1');
-        this.referenceCanvas1 = document.getElementById('referenceCanvas1');
-        this.cameraCanvas1 = document.getElementById('cameraCanvas1');
-        this.scoreEl1 = document.getElementById('score1');
-        
-        // Player 2 elements
         this.referenceVideo2 = document.getElementById('referenceVideo2');
-        this.cameraVideo2 = document.getElementById('cameraVideo2');
+        this.referenceCanvas1 = document.getElementById('referenceCanvas1');
         this.referenceCanvas2 = document.getElementById('referenceCanvas2');
-        this.cameraCanvas2 = document.getElementById('cameraCanvas2');
+        
+        // Single camera feed
+        this.cameraVideo = document.getElementById('cameraVideo');
+        this.cameraCanvas = document.getElementById('cameraCanvas');
+        
+        // Score elements
+        this.scoreEl1 = document.getElementById('score1');
         this.scoreEl2 = document.getElementById('score2');
+        this.combinedScoreEl = document.getElementById('combinedScore');
+        this.finalScores = document.getElementById('finalScores');
+        this.finalScore1 = document.getElementById('finalScore1');
+        this.finalScore2 = document.getElementById('finalScore2');
+        this.finalCombinedScore = document.getElementById('finalCombinedScore');
         
         // Control elements
         this.startBtn = document.getElementById('startBtn');
@@ -26,13 +31,14 @@ class DanceBattleApp2Player {
         
         // State
         this.isRunning = false;
-        this.camera1 = null;
-        this.camera2 = null;
+        this.camera = null;
         this.referencePoses1 = [];
         this.referencePoses2 = [];
         this.score1 = 0;
         this.score2 = 0;
         this.startTime = null;
+        this.player1Pose = null; // Track which detected pose is player 1
+        this.player2Pose = null; // Track which detected pose is player 2
         
         // Colors for each player
         this.player1Colors = { line: '#00FF00', dot: '#FF0000' }; // Green/Red
@@ -50,34 +56,33 @@ class DanceBattleApp2Player {
     setupEventListeners() {
         this.startBtn.addEventListener('click', () => this.start());
         this.stopBtn.addEventListener('click', () => this.stop());
+        
+        // Show final scores when videos end
+        this.referenceVideo1.addEventListener('ended', () => this.showFinalScores());
+        this.referenceVideo2.addEventListener('ended', () => this.showFinalScores());
+    }
+
+    showFinalScores() {
+        if (!this.isRunning) return;
+        this.isRunning = false;
+        this.finalScore1.textContent = Math.floor(this.score1);
+        this.finalScore2.textContent = Math.floor(this.score2);
+        this.finalCombinedScore.textContent = Math.floor(this.score1 + this.score2);
+        this.finalScores.classList.add('show');
     }
 
     async requestCameraPermission() {
         try {
-            this.statusEl.textContent = 'Please allow camera access for both players...';
-            
-            // Request camera for player 1
-            const stream1 = await navigator.mediaDevices.getUserMedia({
+            this.statusEl.textContent = 'Please allow camera access...';
+            const stream = await navigator.mediaDevices.getUserMedia({
                 video: { 
                     width: { ideal: 640 },
                     height: { ideal: 480 },
                     facingMode: 'user'
                 }
             });
-            this.cameraVideo1.srcObject = stream1;
-            this.camera1 = stream1;
-            
-            // Request camera for player 2 (try to get a different device if available)
-            const stream2 = await navigator.mediaDevices.getUserMedia({
-                video: { 
-                    width: { ideal: 640 },
-                    height: { ideal: 480 },
-                    facingMode: 'user'
-                }
-            });
-            this.cameraVideo2.srcObject = stream2;
-            this.camera2 = stream2;
-            
+            this.cameraVideo.srcObject = stream;
+            this.camera = stream;
             this.statusEl.textContent = 'Camera access granted! Ready to start.';
         } catch (error) {
             console.error('Camera permission denied:', error);
@@ -86,86 +91,84 @@ class DanceBattleApp2Player {
     }
 
     async waitForTwoPlayersDetection() {
-        // Check both camera feeds for full body detection
-        const video1 = this.cameraVideo1;
-        const video2 = this.cameraVideo2;
+        const video = this.cameraVideo;
         
-        if (!video1 || !video1.srcObject || !video2 || !video2.srcObject) {
-            throw new Error('Cameras not available. Please grant camera access.');
+        if (!video || !video.srcObject) {
+            throw new Error('Camera not available. Please grant camera access.');
         }
         
-        // Make sure videos are playing
-        if (video1.paused) video1.play();
-        if (video2.paused) video2.play();
+        if (video.paused) video.play();
         
-        const checkInterval = 200; // Check every 200ms
-        const requiredConsecutiveDetections = 5; // Need 5 consecutive frames (1 second)
+        const checkInterval = 200;
+        const requiredConsecutiveDetections = 5;
         
-        let consecutiveDetections1 = 0;
-        let consecutiveDetections2 = 0;
+        let consecutiveDetections = 0;
         
         return new Promise((resolve) => {
             const checkFrame = async () => {
                 try {
-                    // Check player 1
-                    const results1 = await this.poseDetector.detectPoseOnly(video1);
-                    const landmarks1 = this.poseDetector.getPoseLandmarks(results1);
-                    const hasFullBody1 = landmarks1 && 
-                        this.movementComparer.hasFullBody(landmarks1) &&
-                        this.movementComparer.hasGoodLighting(landmarks1);
+                    // Detect multiple poses
+                    const multiplePoses = await this.poseDetector.detectMultiplePoses(video);
                     
-                    if (hasFullBody1) {
-                        consecutiveDetections1++;
+                    // Filter to only full bodies
+                    const fullBodyPoses = multiplePoses.filter(pose => 
+                        pose && 
+                        this.movementComparer.hasFullBody(pose) &&
+                        this.movementComparer.hasGoodLighting(pose)
+                    );
+                    
+                    if (fullBodyPoses.length >= 2) {
+                        consecutiveDetections++;
+                        
+                        if (consecutiveDetections === 1) {
+                            this.statusEl.textContent = 'Detecting both players...';
+                        }
+                        
+                        if (consecutiveDetections >= requiredConsecutiveDetections) {
+                            // Assign poses: left person = player 1, right person = player 2
+                            this.assignPlayers(fullBodyPoses);
+                            resolve();
+                            return;
+                        }
                     } else {
-                        consecutiveDetections1 = 0;
-                    }
-                    
-                    // Check player 2
-                    const results2 = await this.poseDetector.detectPoseOnly(video2);
-                    const landmarks2 = this.poseDetector.getPoseLandmarks(results2);
-                    const hasFullBody2 = landmarks2 && 
-                        this.movementComparer.hasFullBody(landmarks2) &&
-                        this.movementComparer.hasGoodLighting(landmarks2);
-                    
-                    if (hasFullBody2) {
-                        consecutiveDetections2++;
-                    } else {
-                        consecutiveDetections2 = 0;
-                    }
-                    
-                    // Update status
-                    if (consecutiveDetections1 === 0 && consecutiveDetections2 === 0) {
-                        this.statusEl.textContent = 'Please step back so both players\' full bodies (head to feet) are visible with good lighting...';
-                    } else if (consecutiveDetections1 === 0) {
-                        this.statusEl.textContent = 'Player 1: Please step back so your full body is visible...';
-                    } else if (consecutiveDetections2 === 0) {
-                        this.statusEl.textContent = 'Player 2: Please step back so your full body is visible...';
-                    } else {
-                        const progress1 = Math.min(consecutiveDetections1 / requiredConsecutiveDetections * 100, 100);
-                        const progress2 = Math.min(consecutiveDetections2 / requiredConsecutiveDetections * 100, 100);
-                        this.statusEl.textContent = `Detecting players... Player 1: ${Math.floor(progress1)}%, Player 2: ${Math.floor(progress2)}%`;
-                    }
-                    
-                    // If both have enough consecutive detections, we're good
-                    if (consecutiveDetections1 >= requiredConsecutiveDetections && 
-                        consecutiveDetections2 >= requiredConsecutiveDetections) {
-                        resolve(); // Both players detected, ready to start
-                        return;
+                        consecutiveDetections = 0;
+                        if (fullBodyPoses.length === 0) {
+                            this.statusEl.textContent = 'Please step back so both players\' full bodies (head to feet) are visible with good lighting...';
+                        } else {
+                            this.statusEl.textContent = `Detected ${fullBodyPoses.length} player(s). Need 2 players...`;
+                        }
                     }
                 } catch (error) {
                     console.error('Error detecting poses:', error);
-                    consecutiveDetections1 = 0;
-                    consecutiveDetections2 = 0;
+                    consecutiveDetections = 0;
                     this.statusEl.textContent = 'Please step back so both players\' full bodies (head to feet) are visible with good lighting...';
                 }
                 
-                // Continue checking indefinitely until both are detected
                 setTimeout(checkFrame, checkInterval);
             };
             
-            // Start checking
             checkFrame();
         });
+    }
+
+    assignPlayers(poses) {
+        // Assign based on horizontal position: left = player 1, right = player 2
+        if (poses.length >= 2) {
+            // Get center x coordinate of each pose (using shoulders)
+            const getCenterX = (pose) => {
+                if (pose[11] && pose[12]) { // Left and right shoulders
+                    return (pose[11].x + pose[12].x) / 2;
+                }
+                return 0.5; // Default to center if shoulders not detected
+            };
+            
+            const sortedPoses = poses.slice().sort((a, b) => {
+                return getCenterX(a) - getCenterX(b);
+            });
+            
+            this.player1Pose = sortedPoses[0]; // Left person
+            this.player2Pose = sortedPoses[1]; // Right person
+        }
     }
 
     async loadPosesFromDatabase(danceName) {
@@ -224,8 +227,6 @@ class DanceBattleApp2Player {
 
                     try {
                         analysisCtx.drawImage(video, 0, 0, analysisCanvas.width, analysisCanvas.height);
-                        
-                        // Single person detection
                         const results = await this.poseDetector.detectPoseOnly(analysisCanvas);
                         const landmarks = this.poseDetector.getPoseLandmarks(results);
                         
@@ -290,7 +291,6 @@ class DanceBattleApp2Player {
             canvasElement.height = canvasElement.offsetHeight;
         }
 
-        // Use custom drawing with specified colors
         const connections = typeof POSE_CONNECTIONS !== 'undefined' ? POSE_CONNECTIONS : [];
         this.poseDetector.drawConnections(ctx, landmarks, connections, lineColor);
         this.poseDetector.drawLandmarks(ctx, landmarks, dotColor);
@@ -324,12 +324,12 @@ class DanceBattleApp2Player {
 
         this.statusEl.textContent = 'Initializing...';
         this.startBtn.disabled = true;
+        this.finalScores.classList.remove('show');
 
         try {
             // Load or analyze reference videos
             this.statusEl.textContent = 'Loading reference videos...';
             
-            // Try to load poses from database
             const poses1 = await this.loadPosesFromDatabase('demo2');
             const poses2 = await this.loadPosesFromDatabase('demo3');
             
@@ -375,6 +375,9 @@ class DanceBattleApp2Player {
             this.startTime = Date.now();
             this.score1 = 0;
             this.score2 = 0;
+            this.scoreEl1.textContent = '0';
+            this.scoreEl2.textContent = '0';
+            this.combinedScoreEl.textContent = '0';
             
             // Play videos
             await Promise.all([
@@ -440,51 +443,48 @@ class DanceBattleApp2Player {
         if (!this.isRunning) return;
 
         try {
-            // Detect poses for both players
-            const [results1, results2] = await Promise.all([
-                this.poseDetector.detectPose(this.cameraVideo1, this.cameraCanvas1),
-                this.poseDetector.detectPose(this.cameraVideo2, this.cameraCanvas2)
-            ]);
+            // Detect multiple poses in camera
+            const multiplePoses = await this.poseDetector.detectMultiplePoses(this.cameraVideo);
             
-            const landmarks1 = this.poseDetector.getPoseLandmarks(results1);
-            const landmarks2 = this.poseDetector.getPoseLandmarks(results2);
+            const ctx = this.cameraCanvas.getContext('2d');
+            ctx.save();
+            ctx.clearRect(0, 0, this.cameraCanvas.width, this.cameraCanvas.height);
             
-            // Draw with player-specific colors
-            if (landmarks1) {
-                const ctx1 = this.cameraCanvas1.getContext('2d');
-                ctx1.save();
-                ctx1.clearRect(0, 0, this.cameraCanvas1.width, this.cameraCanvas1.height);
-                if (this.cameraCanvas1.width !== this.cameraCanvas1.offsetWidth || 
-                    this.cameraCanvas1.height !== this.cameraCanvas1.offsetHeight) {
-                    this.cameraCanvas1.width = this.cameraCanvas1.offsetWidth;
-                    this.cameraCanvas1.height = this.cameraCanvas1.offsetHeight;
-                }
-                // Get POSE_CONNECTIONS from pose-detector (it's defined there)
-                const connections = this.poseDetector.constructor.POSE_CONNECTIONS || 
-                    (typeof POSE_CONNECTIONS !== 'undefined' ? POSE_CONNECTIONS : []);
-                this.poseDetector.drawConnections(ctx1, landmarks1, connections, this.player1Colors.line);
-                this.poseDetector.drawLandmarks(ctx1, landmarks1, this.player1Colors.dot);
-                ctx1.restore();
+            if (this.cameraCanvas.width !== this.cameraCanvas.offsetWidth || 
+                this.cameraCanvas.height !== this.cameraCanvas.offsetHeight) {
+                this.cameraCanvas.width = this.cameraCanvas.offsetWidth;
+                this.cameraCanvas.height = this.cameraCanvas.offsetHeight;
             }
             
-            if (landmarks2) {
-                const ctx2 = this.cameraCanvas2.getContext('2d');
-                ctx2.save();
-                ctx2.clearRect(0, 0, this.cameraCanvas2.width, this.cameraCanvas2.height);
-                if (this.cameraCanvas2.width !== this.cameraCanvas2.offsetWidth || 
-                    this.cameraCanvas2.height !== this.cameraCanvas2.offsetHeight) {
-                    this.cameraCanvas2.width = this.cameraCanvas2.offsetWidth;
-                    this.cameraCanvas2.height = this.cameraCanvas2.offsetHeight;
+            // Draw all detected poses with their assigned colors
+            if (multiplePoses.length >= 2) {
+                // Reassign players based on current positions
+                this.assignPlayers(multiplePoses);
+                
+                // Draw player 1 (left) with player 1 colors
+                if (this.player1Pose) {
+                    const connections = typeof POSE_CONNECTIONS !== 'undefined' ? POSE_CONNECTIONS : [];
+                    this.poseDetector.drawConnections(ctx, this.player1Pose, connections, this.player1Colors.line);
+                    this.poseDetector.drawLandmarks(ctx, this.player1Pose, this.player1Colors.dot);
                 }
-                const connections = this.poseDetector.constructor.POSE_CONNECTIONS || 
-                    (typeof POSE_CONNECTIONS !== 'undefined' ? POSE_CONNECTIONS : []);
-                this.poseDetector.drawConnections(ctx2, landmarks2, connections, this.player2Colors.line);
-                this.poseDetector.drawLandmarks(ctx2, landmarks2, this.player2Colors.dot);
-                ctx2.restore();
+                
+                // Draw player 2 (right) with player 2 colors
+                if (this.player2Pose) {
+                    const connections = typeof POSE_CONNECTIONS !== 'undefined' ? POSE_CONNECTIONS : [];
+                    this.poseDetector.drawConnections(ctx, this.player2Pose, connections, this.player2Colors.line);
+                    this.poseDetector.drawLandmarks(ctx, this.player2Pose, this.player2Colors.dot);
+                }
+            } else if (multiplePoses.length === 1) {
+                // Only one person detected - draw with player 1 color
+                const connections = typeof POSE_CONNECTIONS !== 'undefined' ? POSE_CONNECTIONS : [];
+                this.poseDetector.drawConnections(ctx, multiplePoses[0], connections, this.player1Colors.line);
+                this.poseDetector.drawLandmarks(ctx, multiplePoses[0], this.player1Colors.dot);
             }
+            
+            ctx.restore();
             
             // Compare player 1
-            if (landmarks1 && this.referencePoses1.length > 0) {
+            if (this.player1Pose && this.referencePoses1.length > 0) {
                 const videoTime1 = this.referenceVideo1.currentTime;
                 const videoDuration1 = this.referenceVideo1.duration;
                 if (videoDuration1 > 0) {
@@ -504,11 +504,12 @@ class DanceBattleApp2Player {
                         );
                         
                         if (hasMovement1) {
-                            const similarity1 = this.movementComparer.comparePoses(landmarks1, refLandmarks1);
+                            const similarity1 = this.movementComparer.comparePoses(this.player1Pose, refLandmarks1);
                             const points1 = Math.floor(similarity1 * 10);
                             if (points1 > 0) {
                                 this.score1 += points1;
                                 this.scoreEl1.textContent = Math.floor(this.score1);
+                                this.updateCombinedScore();
                             }
                         }
                     }
@@ -516,7 +517,7 @@ class DanceBattleApp2Player {
             }
             
             // Compare player 2
-            if (landmarks2 && this.referencePoses2.length > 0) {
+            if (this.player2Pose && this.referencePoses2.length > 0) {
                 const videoTime2 = this.referenceVideo2.currentTime;
                 const videoDuration2 = this.referenceVideo2.duration;
                 if (videoDuration2 > 0) {
@@ -536,11 +537,12 @@ class DanceBattleApp2Player {
                         );
                         
                         if (hasMovement2) {
-                            const similarity2 = this.movementComparer.comparePoses(landmarks2, refLandmarks2);
+                            const similarity2 = this.movementComparer.comparePoses(this.player2Pose, refLandmarks2);
                             const points2 = Math.floor(similarity2 * 10);
                             if (points2 > 0) {
                                 this.score2 += points2;
                                 this.scoreEl2.textContent = Math.floor(this.score2);
+                                this.updateCombinedScore();
                             }
                         }
                     }
@@ -553,6 +555,11 @@ class DanceBattleApp2Player {
         }
     }
 
+    updateCombinedScore() {
+        const combined = this.score1 + this.score2;
+        this.combinedScoreEl.textContent = Math.floor(combined);
+    }
+
     stop() {
         this.isRunning = false;
         
@@ -562,29 +569,21 @@ class DanceBattleApp2Player {
         this.referenceVideo2.pause();
         this.referenceVideo2.currentTime = 0;
         
-        // Stop cameras
-        if (this.camera1) {
-            this.camera1.getTracks().forEach(track => track.stop());
-            this.camera1 = null;
+        // Stop camera
+        if (this.camera) {
+            this.camera.getTracks().forEach(track => track.stop());
+            this.camera = null;
         }
-        if (this.camera2) {
-            this.camera2.getTracks().forEach(track => track.stop());
-            this.camera2 = null;
-        }
-        this.cameraVideo1.srcObject = null;
-        this.cameraVideo2.srcObject = null;
+        this.cameraVideo.srcObject = null;
         
         // Clear canvases
-        [this.referenceCanvas1, this.cameraCanvas1, this.referenceCanvas2, this.cameraCanvas2].forEach(canvas => {
+        [this.referenceCanvas1, this.referenceCanvas2, this.cameraCanvas].forEach(canvas => {
             const ctx = canvas.getContext('2d');
             ctx.clearRect(0, 0, canvas.width, canvas.height);
         });
         
-        // Reset scores
-        this.score1 = 0;
-        this.score2 = 0;
-        this.scoreEl1.textContent = '0';
-        this.scoreEl2.textContent = '0';
+        // Show final scores
+        this.showFinalScores();
         
         this.statusEl.textContent = 'Stopped. Everything cleared. Ready to start again.';
         this.startBtn.disabled = false;
@@ -596,4 +595,3 @@ class DanceBattleApp2Player {
 document.addEventListener('DOMContentLoaded', () => {
     new DanceBattleApp2Player();
 });
-
